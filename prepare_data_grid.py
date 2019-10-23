@@ -5,6 +5,8 @@ from glob import glob
 
 from itertools import groupby
 
+from data import load_sentence
+
 
 I = "data"
 O = "data/kaldi"
@@ -37,17 +39,6 @@ def get_wav_path(spk_id, filename):
     return f"/srv/share/student-share/data/grid/audio-16khz/s{spk_id}/{filename}.wav"
 
 
-def load_sentence(spk_id, filename):
-    def process(line):
-        *_, word = line.split()
-        return word
-    def drop_sil(words):
-        return (word for word in words if word != "sil")
-    path = f"data/align/s{spk_id}/{filename}.align"
-    with open(path, "r") as f:
-        return " ".join(drop_sil(process(line) for line in f.readlines()))
-
-
 def main():
     files = glob(I + "/align/**/*.align", recursive=True)
     files = sorted(files, key=lambda f: get_utt_id(f))
@@ -64,7 +55,7 @@ def main():
             utt_id = get_utt_id(p)
             spk_id = get_spk_id(p)
             spk_2d = f"s{spk_id:02d}"
-            sentence = load_sentence(spk_id, get_filename(p))
+            sentence = load_sentence(get_filename(p), 's' + str(spk_id))
 
             f.write("{} {}\n".format(utt_id, get_wav_path(spk_id, get_filename(p))))
             g.write("{} {}\n".format(utt_id, spk_2d))

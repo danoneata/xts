@@ -40,9 +40,13 @@ def main():
 
     for path in tqdm.tqdm(glob.glob(glob_path)):
 
-        landmarks = detect_face_landmarks(detector, predictor, path)
-        *_, subject, filename = path.split(os.path.sep)
+        try:
+            landmarks = detect_face_landmarks(detector, predictor, path)
+        except Exception:
+            print(path)
+            continue
 
+        *_, subject, filename = path.split(os.path.sep)
         filename, _ = os.path.splitext(filename)
         filename = filename + ".json"
 
