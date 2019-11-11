@@ -25,7 +25,7 @@ def load_lexicon():
 
 def find_word_id(lexicon, text, phones, phone_id):
     lengths = [len(lexicon[word]) for word in text.split()]
-    i = phone_id - sum(p == "SIL" for p in phones[:phone_id])
+    i = phone_id - sum(p in ("SIL", "HH") for p in phones[:phone_id])
     word_id = 0
     while True:
         if i - lengths[word_id] < 0:

@@ -12,7 +12,7 @@ SELECTED_PHONES = [
     "IH",
     "IY",
     "OW",
-    "OY",
-    "UH",
+    # "OY",
+    # "UH",
     "UW",
 ]
