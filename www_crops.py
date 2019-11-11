@@ -12,6 +12,7 @@ from data import DATA_DIR, load_data
 
 random.seed(SEED)
 SPLIT = "small"
+N_SAMPLES = 128
 
 
 def load_lexicon():
@@ -54,7 +55,7 @@ def create_page_index():
         T.p("""
             The web-pages linked below show alignments of phones with lip movement.
             The data is a subset of 2000 utterances from the Grid corpus.
-            For each phone, we picked a random subset of 512 pairs.
+            We picked a selection of phones and for each of them we randomly selected at most 128 pairs.
         """)
 
         with T.ul():
@@ -62,6 +63,22 @@ def create_page_index():
                 with T.li():
                     for i in g:
                         T.a(i, href=i + "/index.html")
+
+        T.p("""Mean duration (s) of each phone:""")
+        T.pre("""
+AA 0.154
+AE 0.066
+AH 0.060
+AO 0.143
+AW 0.277
+AY 0.142
+EH 0.091
+EY 0.124
+IH 0.068
+IY 0.113
+OW 0.123
+UW 0.152
+            """, style="font-family: Courier")
 
     path = "www/index.html"
     with open(path, "w") as f:
@@ -137,18 +154,29 @@ def create_page_1(phone, data):
 
 def main():
     create_page_index()
+
+    samples = load_data(SPLIT)
     get_key = lambda sample, i: f"{sample.key}_{i:04d}"
+
     for phone in SELECTED_PHONES:
         print(phone)
         data = {
             get_key(sample, i): sample
-            for sample in load_data(SPLIT)
+            for sample in samples
             for i, (p, _, _) in enumerate(sample.audio_alignment)
             if p == phone
         }
-        data = {k: v for k, v in data.items() if os.path.exists(os.path.join(DATA_DIR, "crops", k + "_anima.gif"))}
-        keys = random.sample(data.keys(), 512)
-        data = {k: data[k] for k in keys}
+        data = {
+            k: v
+            for k, v in data.items()
+            if os.path.exists(os.path.join(DATA_DIR, "crops", k + "_anima.gif"))
+        }
+        if len(data) > N_SAMPLES:
+            keys = random.sample(data.keys(), N_SAMPLES)
+        else:
+            keys = data.keys()
+
+        data = {k: data[k] for k in sorted(keys)}
         create_page_1(phone, data)
 
 
