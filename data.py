@@ -40,6 +40,9 @@ class Time:
     def to_seconds(self):
         return self.t
 
+    def to_frame(self):
+        return self.t * FPS
+
 
 def load_audio_alignments():
     def process(line):
