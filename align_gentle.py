@@ -21,37 +21,45 @@ def align_gentle(sample):
     return requests.post(GENTLE_URL, data=dict(audio=audio, transcript=transcript))
 
 
-def get_alignments_str(split):
-    for sample in tqdm(load_data(split)):
+def get_alignments_str(sample):
         response = align_gentle(sample)
-        words = r.json()["words"]
+        words = response.json()["words"]
 
         # Utterance id
         id_ = int(sample.speaker[1:])
         utt_id = f"s{id_:02d}_{sample.key}"
 
         # Format output
+        lines = []
         sil_start_duration = words[0]["start"]
-        yield f"{utt_id} 1 0.00 {sil_start_duration:.2f} SIL"
+        lines.append(f"{utt_id} 1 0.00 {sil_start_duration:.2f} SIL")
 
         for word in words:
             start_time = word["start"]
             for phone in word["phones"]:
                 duration = phone["duration"]
                 phone_name = phone["phone"].upper()
-                yield f"{utt_id} 1 {start_time:.2f} {duration:.2f} {phone_name}"
+                lines.append(f"{utt_id} 1 {start_time:.2f} {duration:.2f} {phone_name}")
                 start_time += duration
 
         sil_end_start = words[-1]["end"]
         sil_end_duration = 3 - sil_end_start
-        yield f"{utt_id} 1 {sil_end_start:.2f} {sil_end_duration:.2f} SIL"
+        lines.append(f"{utt_id} 1 {sil_end_start:.2f} {sil_end_duration:.2f} SIL")
+
+        return '\n'.join(lines)
 
 
 def main():
     split = sys.argv[1]
     with open(f"data/alignments-{split}-gentle.txt", "w") as f:
-        for line in get_alignments_str(split):
-            f.write(line + "\n")
+        for sample in tqdm(load_data(split)):
+            try:
+                lines = get_alignments_str(sample)
+                f.write(lines)
+                f.write('\n')
+            except Exception as e:
+                print("ERROR → ", sample.speaker, sample.key)
+                # print(e)
 
 
 if __name__ == "__main__":
