@@ -17,7 +17,7 @@ import src.dataset
 
 from models import MODELS
 
-ROOT = ""
+ROOT = os.environ.get("ROOT", "")
 
 SEED = 1337
 MAX_EPOCHS = 128
@@ -31,9 +31,10 @@ LR_REDUCE_PARAMS = {
 def collate_fn(batches):
     videos = [batch[0] for batch in batches]
     spects = [batch[1] for batch in batches]
-    max_t = max(video.shape[0] for video in videos)
-    videos = [F.pad(video, pad=(0, 0, 0, 0, 0, max_t - video.shape[0])) for video in videos]
-    spects = [F.pad(spect, pad=(0, 0, 0, max_t - spect.shape[0])) for spect in spects]
+    max_v = max(video.shape[0] for video in videos)
+    max_s = max(spect.shape[0] for spect in spects)
+    videos = [F.pad(video, pad=(0, 0, 0, 0, 0, max_v - video.shape[0])) for video in videos]
+    spects = [F.pad(spect, pad=(0, 0, 0, max_s - spect.shape[0])) for spect in spects]
     video = torch.stack(videos)
     spect = torch.stack(spects)
     return video, spect
@@ -46,12 +47,11 @@ def main():
                         required=True,
                         choices=MODELS,
                         help="which model type to train")
-
     parser.add_argument("-m",
                         "--model",
                         type=str,
                         default=None,
-                        required=True,
+                        required=False,
                         help="path to model to load")
     parser.add_argument("-v",
                         "--verbose",
@@ -86,25 +86,20 @@ def main():
         collate_fn=collate_fn,
         shuffle=False)
 
-    ignite_train = model.ignite_random(train_loader, args.num_minibatches,
-                                       6, 0.5)
+    # ignite_train = DataLoader(train_loader, shuffle=True)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.04)
     loss = nn.MSELoss()
 
     device = 'cuda'
 
-    trainer = engine.create_supervised_trainer(model,
-                                               optimizer,
-                                               loss,
-                                               device=device,
-                                               prepare_batch=model.ignite_batch)
+    trainer = engine.create_supervised_trainer(model, optimizer, loss, device=device)
 
     evaluator = engine.create_supervised_evaluator(
         model,
         metrics={'loss': ignite.metrics.Loss(loss)},
         device=device,
-        prepare_batch=model.ignite_batch)
+    )
 
     @trainer.on(engine.Events.ITERATION_COMPLETED)
     def log_training_loss(trainer):
@@ -113,14 +108,11 @@ def main():
 
     @trainer.on(engine.Events.EPOCH_COMPLETED)
     def log_validation_loss(trainer):
-        evaluator.run(model.ignite_all(valid_loader, args.minibatch_size))
+        evaluator.run(valid_loader)
         metrics = evaluator.state.metrics
         print("Epoch {:3d} Valid loss: {:8.6f} ←".format(
             trainer.state.epoch, metrics['loss']))
-        trainer.state.dataloader = model.ignite_random(train_loader,
-                                                       args.num_minibatches,
-                                                       args.minibatch_size,
-                                                       args.epoch_fraction)
+        # trainer.state.dataloader = model.ignite_random(train_loader, args.num_minibatches, args.minibatch_size, args.epoch_fraction)
 
     lr_reduce = lr_scheduler.ReduceLROnPlateau(optimizer,
                                                verbose=args.verbose,
@@ -149,7 +141,7 @@ def main():
     evaluator.add_event_handler(engine.Events.EPOCH_COMPLETED,
                                 checkpoint_handler, {"model": model})
 
-    trainer.run(ignite_train, max_epochs=MAX_EPOCHS)
+    trainer.run(train_loader, max_epochs=MAX_EPOCHS)
     torch.save(model.state_dict(), model_path)
     print("Model saved at:", model_path)
 
