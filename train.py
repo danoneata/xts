@@ -33,7 +33,9 @@ def collate_fn(batches):
     spects = [batch[1] for batch in batches]
     max_v = max(video.shape[0] for video in videos)
     max_s = max(spect.shape[0] for spect in spects)
-    videos = [F.pad(video, pad=(0, 0, 0, 0, 0, max_v - video.shape[0])) for video in videos]
+    videos = [
+        F.pad(video, pad=(0, 0, 0, 0, 0, max_v - video.shape[0])) for video in videos
+    ]
     spects = [F.pad(spect, pad=(0, 0, 0, max_s - spect.shape[0])) for spect in spects]
     video = torch.stack(videos)
     spect = torch.stack(spects)
@@ -42,23 +44,23 @@ def collate_fn(batches):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a given model")
-    parser.add_argument("--model-type",
-                        type=str,
-                        required=True,
-                        choices=MODELS,
-                        help="which model type to train")
-    parser.add_argument("-m",
-                        "--model",
-                        type=str,
-                        default=None,
-                        required=False,
-                        help="path to model to load")
-    parser.add_argument("-v",
-                        "--verbose",
-                        action="count",
-                        help="verbosity level")
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        required=True,
+        choices=MODELS,
+        help="which model type to train",
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        default=None,
+        required=False,
+        help="path to model to load",
+    )
+    parser.add_argument("-v", "--verbose", action="count", help="verbosity level")
     args = parser.parse_args()
-
 
     print(args)
 
@@ -75,61 +77,61 @@ def main():
     valid_dataset = src.dataset.xTSDataset(ROOT, "tiny")
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=3,
-        collate_fn=collate_fn,
-        shuffle=True)
+        train_dataset, batch_size=3, collate_fn=collate_fn, shuffle=True
+    )
 
     valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=3,
-        collate_fn=collate_fn,
-        shuffle=False)
+        valid_dataset, batch_size=3, collate_fn=collate_fn, shuffle=False
+    )
 
     # ignite_train = DataLoader(train_loader, shuffle=True)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.04)
     loss = nn.MSELoss()
 
-    device = 'cuda'
+    device = "cuda"
 
     trainer = engine.create_supervised_trainer(model, optimizer, loss, device=device)
 
     evaluator = engine.create_supervised_evaluator(
-        model,
-        metrics={'loss': ignite.metrics.Loss(loss)},
-        device=device,
+        model, metrics={"loss": ignite.metrics.Loss(loss)}, device=device,
     )
 
     @trainer.on(engine.Events.ITERATION_COMPLETED)
     def log_training_loss(trainer):
-        print("Epoch {:3d} Train loss: {:8.6f}".format(trainer.state.epoch,
-                                                       trainer.state.output))
+        print(
+            "Epoch {:3d} Train loss: {:8.6f}".format(
+                trainer.state.epoch, trainer.state.output
+            )
+        )
 
     @trainer.on(engine.Events.EPOCH_COMPLETED)
     def log_validation_loss(trainer):
         evaluator.run(valid_loader)
         metrics = evaluator.state.metrics
-        print("Epoch {:3d} Valid loss: {:8.6f} ←".format(
-            trainer.state.epoch, metrics['loss']))
+        print(
+            "Epoch {:3d} Valid loss: {:8.6f} ←".format(
+                trainer.state.epoch, metrics["loss"]
+            )
+        )
         # trainer.state.dataloader = model.ignite_random(train_loader, args.num_minibatches, args.minibatch_size, args.epoch_fraction)
 
-    lr_reduce = lr_scheduler.ReduceLROnPlateau(optimizer,
-                                               verbose=args.verbose,
-                                               **LR_REDUCE_PARAMS)
+    lr_reduce = lr_scheduler.ReduceLROnPlateau(
+        optimizer, verbose=args.verbose, **LR_REDUCE_PARAMS
+    )
 
     @evaluator.on(engine.Events.COMPLETED)
     def update_lr_reduce(engine):
-        loss = engine.state.metrics['loss']
+        loss = engine.state.metrics["loss"]
         lr_reduce.step(loss)
 
     def score_function(engine):
-        return -engine.state.metrics['loss']
+        return -engine.state.metrics["loss"]
 
     early_stopping_handler = ignite.handlers.EarlyStopping(
-        patience=PATIENCE, score_function=score_function, trainer=trainer)
-    evaluator.add_event_handler(engine.Events.EPOCH_COMPLETED,
-                                early_stopping_handler)
+        patience=PATIENCE, score_function=score_function, trainer=trainer
+    )
+    evaluator.add_event_handler(engine.Events.EPOCH_COMPLETED, early_stopping_handler)
 
     checkpoint_handler = ignite.handlers.ModelCheckpoint(
         "output/models/checkpoints",
@@ -137,9 +139,11 @@ def main():
         score_function=score_function,
         n_saved=5,
         require_empty=False,
-        create_dir=True)
-    evaluator.add_event_handler(engine.Events.EPOCH_COMPLETED,
-                                checkpoint_handler, {"model": model})
+        create_dir=True,
+    )
+    evaluator.add_event_handler(
+        engine.Events.EPOCH_COMPLETED, checkpoint_handler, {"model": model}
+    )
 
     trainer.run(train_loader, max_epochs=MAX_EPOCHS)
     torch.save(model.state_dict(), model_path)
