@@ -9,7 +9,9 @@ import torch
 import torch.nn as nn
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
+
 from torch.nn import functional as F
+
 import ignite.engine as engine
 import ignite.handlers
 
@@ -31,14 +33,19 @@ LR_REDUCE_PARAMS = {
 def collate_fn(batches):
     videos = [batch[0] for batch in batches]
     spects = [batch[1] for batch in batches]
+
     max_v = max(video.shape[0] for video in videos)
+    pad_v = lambda video: (0, 0, 0, 0, 0, max_v - video.shape[0])
+
     max_s = max(spect.shape[0] for spect in spects)
-    videos = [
-        F.pad(video, pad=(0, 0, 0, 0, 0, max_v - video.shape[0])) for video in videos
-    ]
-    spects = [F.pad(spect, pad=(0, 0, 0, max_s - spect.shape[0])) for spect in spects]
+    pad_s = lambda spect: (0, 0, 0, max_s - spect.shape[0])
+
+    videos = [F.pad(video, pad=pad_v(video)) for video in videos]
+    spects = [F.pad(spect, pad=pad_s(spect)) for spect in spects]
+
     video = torch.stack(videos)
     spect = torch.stack(spects)
+
     return video, spect
 
 
@@ -73,8 +80,8 @@ def main():
         model_name = f"{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
-    train_dataset = src.dataset.xTSDataset(ROOT, "tiny")
-    valid_dataset = src.dataset.xTSDataset(ROOT, "tiny")
+    train_dataset = src.dataset.xTSDataset(ROOT, "tiny2")
+    valid_dataset = src.dataset.xTSDataset(ROOT, "tiny2")
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=3, collate_fn=collate_fn, shuffle=True
@@ -86,15 +93,30 @@ def main():
 
     # ignite_train = DataLoader(train_loader, shuffle=True)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.04)
-    loss = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    mse_loss = nn.MSELoss()
+
+    def loss(pred, true):
+        pred1, pred2 = pred
+        return mse_loss(pred1, true) + mse_loss(pred2, true)
 
     device = "cuda"
 
-    trainer = engine.create_supervised_trainer(model, optimizer, loss, device=device)
+    def prepare_batch(batch, device, non_blocking):
+        batch_x, batch_y = batch
+        batch_x = batch_x.to(device)
+        batch_y = batch_y.to(device)
+        return (batch_x, batch_y), batch_y
+
+    trainer = engine.create_supervised_trainer(
+        model, optimizer, loss, device=device, prepare_batch=prepare_batch
+    )
 
     evaluator = engine.create_supervised_evaluator(
-        model, metrics={"loss": ignite.metrics.Loss(loss)}, device=device,
+        model,
+        metrics={"loss": ignite.metrics.Loss(loss)},
+        device=device,
+        prepare_batch=prepare_batch,
     )
 
     @trainer.on(engine.Events.ITERATION_COMPLETED)
