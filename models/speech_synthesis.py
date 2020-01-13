@@ -43,6 +43,17 @@ class Tacotron2(nn.Module):
         B, _, D = y.shape
         return torch.cat((torch.zeros(B, 1, D).to(y.device), y[:, :-1]), dim=1)
 
+    def post_process(self, z):
+        # B, D, S
+        z = z.permute(0, 2, 1)
+        # B, D, S
+        z_post = self.postnet(z) + z
+        # B, S, D'
+        z_post = z_post.permute(0, 2, 1)
+        # B, S, D'
+        z = z.permute(0, 2, 1)
+        return z, z_post
+
     def forward(self, x, y):
         # Glossary:
         # B →  batch size
@@ -78,13 +89,38 @@ class Tacotron2(nn.Module):
         # B, S, D3
         z = self.linear_projection(z)
 
-        # B, D3, S
-        z = z.permute(0, 2, 1)
-        # B, D4, S
-        z_post = self.postnet(z) + z
-        # B, S, D4
-        z_post = z_post.permute(0, 2, 1)
-        # B, S, D4
-        z = z.permute(0, 2, 1)
+        return self.post_process(z)
 
-        return z, z_post
+    def predict(self, x):
+        x = x.repeat_interleave(3, dim=1)
+        B, S, _ = x.shape
+
+        z = torch.zeros(B, 1, self.n_mel_channels).to(x.device)
+        h = torch.zeros(1, B, self.decoder_rnn_dim).to(x.device)
+        c = torch.zeros(1, B, self.decoder_rnn_dim).to(x.device)
+
+        y = []
+
+        for i in range(S):
+            # B, 1, D1
+            z = self.prenet(z)
+            # B, 1, Dx + D1
+            z = torch.cat((z, x[:, i].unsqueeze(1)), dim=2)
+            # 1, B, Dx + D1
+            z = z.permute(1, 0, 2)
+            # 1, B, D2
+            z, (h, c) = self.decoder_rnn(z, (h, c))
+            # 1, B, D2
+            z = F.dropout(z, self.p_decoder_dropout, self.training)
+            # S, D2, 1
+            z = z.permute(1, 0, 2)
+
+            # B, 1, Dx + D2
+            z = torch.cat((z, x[:, i].unsqueeze(1)), dim=2)
+            # B, 1, D3
+            z = self.linear_projection(z)
+
+            y.append(z)
+
+        y = torch.cat(y, dim=1)
+        return self.post_process(y)

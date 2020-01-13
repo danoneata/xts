@@ -60,10 +60,8 @@ class Sven(nn.Module):
         self.encoder = nn.Sequential(*list(self.encoder.children())[:-1])
         self.decoder = Tacotron2(hparams)
 
-    def forward(self, x_y):
-        x, y = x_y
+    def encode(self, x):
         B, S, H, W = x.shape
-
         # B, 1, S, H, W
         x = x.unsqueeze(1)
         # B, num_filters_3d, S, H, W
@@ -75,6 +73,14 @@ class Sven(nn.Module):
         # BS, Dx, 1, 1
         x = self.encoder(x)
         # B, S, Dx
-        x = x.squeeze().view(B, S, hparams.encoder_embedding_dim)
+        return x.squeeze().view(B, S, hparams.encoder_embedding_dim)
 
+    def forward(self, x_y):
+        x, y = x_y
+        x = self.encode(x)
         return self.decoder(x, y)
+
+    def predict(self, x):
+        x = self.encode(x)
+        _, y = self.decoder.predict(x)
+        return y
