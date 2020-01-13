@@ -26,6 +26,7 @@ ROOT = os.environ.get("ROOT", "")
 SEED = 1337
 MAX_EPOCHS = 128
 PATIENCE = 4
+BATCH_SIZE = 3
 LR_REDUCE_PARAMS = {
     "factor": 0.2,
     "patience": 2,
@@ -59,6 +60,12 @@ def main():
         required=True,
         choices=MODELS,
         help="which model type to train",
+    )
+    parser.add_argument(
+        "--filelist",
+        type=str,
+        default="tiny2",
+        help="name of the filelist to use",
     )
     parser.add_argument(
         "-m",
@@ -106,15 +113,15 @@ def main():
         "spect": None,
     }
 
-    train_dataset = src.dataset.xTSDataset(ROOT, "tiny2", transforms=train_transforms)
-    valid_dataset = src.dataset.xTSDataset(ROOT, "tiny2", transforms=valid_transforms)
+    train_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-train", transforms=train_transforms)
+    valid_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-valid", transforms=valid_transforms)
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=3, collate_fn=collate_fn, shuffle=True
+        train_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=True
     )
 
     valid_loader = torch.utils.data.DataLoader(
-        valid_dataset, batch_size=3, collate_fn=collate_fn, shuffle=False
+        valid_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
 
     # ignite_train = DataLoader(train_loader, shuffle=True)
