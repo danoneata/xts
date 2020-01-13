@@ -20,8 +20,6 @@ class Tacotron2(nn.Module):
         self.decoder_rnn_dim = hparams.decoder_rnn_dim
         self.prenet_dim = hparams.prenet_dim
 
-        # TODO Add dropout in the forward pass
-        self.p_attention_dropout = hparams.p_attention_dropout
         self.p_decoder_dropout = hparams.p_decoder_dropout
 
         self.prenet = Prenet(
@@ -70,6 +68,8 @@ class Tacotron2(nn.Module):
         z = z.permute(1, 0, 2)
         # S, B, D2
         z, _ = self.decoder_rnn(z)
+        # S, B, D2
+        z = F.dropout(z, self.p_decoder_dropout, self.training)
         # S, D2, B
         z = z.permute(1, 0, 2)
 

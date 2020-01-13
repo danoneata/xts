@@ -20,7 +20,6 @@ hparams = SimpleNamespace(
     prenet_dim=256,
     max_decoder_steps=1000,
     gate_threshold=0.5,
-    p_attention_dropout=0.1,
     p_decoder_dropout=0.1,
     # Mel-post processing network parameters
     postnet_embedding_dim=512,
