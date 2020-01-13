@@ -49,9 +49,13 @@ class Baseline(nn.Module):
 class Sven(nn.Module):
     def __init__(self):
         super(Sven, self).__init__()
+        # number of 3d convolutions filters
+        self.num_filters_3d = 64
+        # use 3d convolution to extract features in time
+        self.conv0_3d = nn.Conv3d(1, self.num_filters_3d, kernel_size=(3, 5, 5), stride=(1, 1, 1), padding=(1, 2, 2), bias=False)
         self.encoder = resnet18()
         # use grayscale images
-        self.encoder.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        self.encoder.conv1 = nn.Conv2d(self.num_filters_3d, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         # drop the last layer corresponind to the softmax classification
         self.encoder = nn.Sequential(*list(self.encoder.children())[:-1])
         self.decoder = Tacotron2(hparams)
@@ -62,8 +66,14 @@ class Sven(nn.Module):
 
         # scales data in [0, 1]
         x = x.float() / 255
-        # BS, 1, H, W
-        x = x.view(B * S, H, W).unsqueeze(1)
+        # B, 1, S, H, W
+        x = x.unsqueeze(1)
+        # B, num_filters_3d, S, H, W
+        x = self.conv0_3d(x)
+        # B, S, num_filters_3d, H, W
+        x = x.permute(0, 2, 1, 3, 4)
+        # BS, num_filters_3d, H, W
+        x = x.reshape(B * S, self.num_filters_3d, H, W)
         # BS, Dx, 1, 1
         x = self.encoder(x)
         # B, S, Dx
