@@ -64,8 +64,6 @@ class Sven(nn.Module):
         x, y = x_y
         B, S, H, W = x.shape
 
-        # scales data in [0, 1]
-        x = x.float() / 255
         # B, 1, S, H, W
         x = x.unsqueeze(1)
         # B, num_filters_3d, S, H, W

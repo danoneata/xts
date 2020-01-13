@@ -1,4 +1,4 @@
-from typing import List, Callable, Union, Tuple
+from typing import Callable, Dict, List, Tuple, Union
 
 import datetime
 import inspect
@@ -50,7 +50,7 @@ def audio_to_mel(audio):
     return melspec
 
 
-def get_mel_from_path(path: str):
+def get_mel_from_path(path: str, transform=None):
     SAMPLING_RATE = 16_000
     audio, sampling_rate = load_wav_to_torch(path)
     assert sampling_rate == SAMPLING_RATE
@@ -94,71 +94,57 @@ class xTSSample(object):
             "video": os.path.join(root, "video"),
         }
 
-    def get_video_lips(self, path_face, path_video):
+    def get_video_lips(self, path_face, path_video, transform):
         """Crop lips"""
         with open(path_face) as f:
-            fl = json.load(f)
+            face_landmarks = json.load(f)
 
-        top = fl[0][51][1] - 10
-        bot = fl[0][58][1] + 10
-        left = fl[0][49][0] - 10
-        right = fl[0][55][0] + 10
+        delta = 15
 
-        cap = cv2.VideoCapture(path_video)
-        frameCount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frameWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        top = face_landmarks[0][51][1] - delta
+        bottom = face_landmarks[0][58][1] + delta
+        left = face_landmarks[0][49][0] - delta
+        right = face_landmarks[0][55][0] + delta
 
-        buf = np.empty((frameCount, frameHeight, frameWidth), np.dtype("uint8"))
-        self.crop = np.empty(
-            (frameCount, bot - top + 20, right - left + 20), np.dtype("uint8")
-        )
-        fc = 0
-        ret = True
+        capture = cv2.VideoCapture(path_video)
+        frames = []
 
-        while fc < frameCount and ret:
-            ret, frame = cap.read()
-            buf[fc] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            self.crop[fc] = buf[fc][top - 10 : bot + 10, left - 10 : right + 10]
-            fc += 1
+        while True:
+            ret, frame = capture.read()
+            if not ret:
+                break
+            frame = frame[top: bottom, left: right]
+            frames.append(transform(frame))
 
-        cap.release()
-        self.crop = [np.array(Image.fromarray(im).resize((64, 64))) for im in self.crop]
-        self.crop = np.stack(self.crop)
-        return torch.from_numpy(self.crop)
 
-    def load(self):
+        frames = torch.cat(frames)
+        capture.release()
+
+        return frames
+
+    def load(self, transforms):
         _get_path = lambda m, e: os.path.join(self.paths[m], self.person, self.file + e)
-        self.video = self.get_video_lips(_get_path("face", ".json"), _get_path("video", ".mpg"))
-        self.spect = get_mel_from_path(_get_path("audio", ".wav"))
+        self.video = self.get_video_lips(_get_path("face", ".json"), _get_path("video", ".mpg"), transforms["video"])
+        self.spect = get_mel_from_path(_get_path("audio", ".wav"), transforms["spect"])
 
 
 class xTSDataset(torch.utils.data.Dataset):
     """Implementation of the pytorch Dataset."""
 
-    def __init__(self, root: str, type: str, transform: List[Callable] = None):
+    def __init__(self, root: str, type: str, transforms: Dict[str, Callable] = None):
         """ Initializes the xTSDataset
         Args:
             root (string): Path to the root data directory.
             type (string): name of the txt file containing the data split
         """
         self.root = root
+        self.transforms = transforms
 
-        path = os.path.join(self.root, "filelists", type + ".txt")
-        with open(path, "r") as f:
-            content = f.read()
+        with open(os.path.join(self.root, "filelists", type + ".txt"), "r") as f:
+            file_folder = [line.split() for line in f.readlines()]
 
-        self.folder = []
-        self.file = []
-        res = content.split()
-        i = 0
-        for idx in res:
-            if i % 2 == 0:
-                self.file.append(idx)
-            if i % 2 == 1:
-                self.folder.append(idx)
-            i = i + 1
-        self.size = len(self.file)
+        self.size = len(file_folder)
+        self.file, self.folder = zip(*file_folder)
 
     def __len__(self):
         return self.size
@@ -166,7 +152,8 @@ class xTSDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int):
         if idx >= self.size:
             raise IndexError
+
         stream = xTSSample(self.root, self.folder[idx], self.file[idx])
-        stream.load()
+        stream.load(self.transforms)
 
         return stream.video, stream.spect

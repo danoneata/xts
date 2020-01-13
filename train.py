@@ -12,6 +12,8 @@ import torch.utils.data
 
 from torch.nn import functional as F
 
+from torchvision import transforms
+
 import ignite.engine as engine
 import ignite.handlers
 
@@ -80,8 +82,32 @@ def main():
         model_name = f"{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
-    train_dataset = src.dataset.xTSDataset(ROOT, "tiny2")
-    valid_dataset = src.dataset.xTSDataset(ROOT, "tiny2")
+    image_transform = transforms.Compose([
+        transforms.Grayscale(),
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.40], [0.15]),  # very rough estimation of the mean and standard deviation
+    ])
+
+    train_transforms = {
+        "video": transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomHorizontalFlip(),
+            image_transform,
+        ]),
+        "spect": None,
+    }
+
+    valid_transforms = {
+        "video": transforms.Compose([
+            transforms.ToPILImage(),
+            image_transform,
+        ]),
+        "spect": None,
+    }
+
+    train_dataset = src.dataset.xTSDataset(ROOT, "tiny2", transforms=train_transforms)
+    valid_dataset = src.dataset.xTSDataset(ROOT, "tiny2", transforms=valid_transforms)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=3, collate_fn=collate_fn, shuffle=True
