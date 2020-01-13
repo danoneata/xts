@@ -31,6 +31,7 @@ LR_REDUCE_PARAMS = {
     "factor": 0.2,
     "patience": 2,
 }
+DATASET = "grid"
 
 
 def collate_fn(batches):
@@ -86,7 +87,7 @@ def main():
         model_name = os.path.basename(args.model)
         model.load(model_path)
     else:
-        model_name = f"{args.model_type}"
+        model_name = f"{DATASET}_{args.filelist}_{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
     image_transform = transforms.Compose([
