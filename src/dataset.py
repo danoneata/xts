@@ -94,9 +94,9 @@ class xTSSample(object):
             "video": os.path.join(root, "video"),
         }
 
-    def get_video_lips(self):
+    def get_video_lips(self, path_face, path_video):
         """Crop lips"""
-        with open(os.path.join(self.paths["face"], self.person, self.file + ".json")):
+        with open(path_face) as f:
             fl = json.load(f)
 
         top = fl[0][51][1] - 10
@@ -104,9 +104,7 @@ class xTSSample(object):
         left = fl[0][49][0] - 10
         right = fl[0][55][0] + 10
 
-        cap = cv2.VideoCapture(
-            os.path.join(self.paths["video"], self.person, self.file + ".mpg")
-        )
+        cap = cv2.VideoCapture(path_video)
         frameCount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frameWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -127,12 +125,12 @@ class xTSSample(object):
         cap.release()
         self.crop = [np.array(Image.fromarray(im).resize((64, 64))) for im in self.crop]
         self.crop = np.stack(self.crop)
-        self.data = torch.from_numpy(self.crop)
+        return torch.from_numpy(self.crop)
 
     def load(self):
         _get_path = lambda m, e: os.path.join(self.paths[m], self.person, self.file + e)
-        self.video = get_video_lips(_get_path("video", ".mpg"))
-        self.spect = get_mel_spect(_get_path("audio", ".wav"))
+        self.video = self.get_video_lips(_get_path("face", ".json"), _get_path("video", ".mpg"))
+        self.spect = get_mel_from_path(_get_path("audio", ".wav"))
 
 
 class xTSDataset(torch.utils.data.Dataset):
