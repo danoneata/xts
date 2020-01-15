@@ -24,7 +24,7 @@ from models import MODELS
 ROOT = os.environ.get("ROOT", "")
 
 SEED = 1337
-MAX_EPOCHS = 128
+MAX_EPOCHS = 64
 PATIENCE = 4
 BATCH_SIZE = 16
 LR_REDUCE_PARAMS = {
@@ -51,6 +51,31 @@ def collate_fn(batches):
     spect = torch.stack(spects)
 
     return video, spect
+
+
+IMAGE_TRANSFORM = transforms.Compose([
+    transforms.Grayscale(),
+    transforms.Resize((64, 64)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.40], [0.15]),  # very rough estimation of the mean and standard deviation
+])
+
+TRAIN_TRANSFORMS = {
+    "video": transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.RandomHorizontalFlip(),
+        IMAGE_TRANSFORM,
+    ]),
+    "spect": None,
+}
+
+VALID_TRANSFORMS = {
+    "video": transforms.Compose([
+        transforms.ToPILImage(),
+        IMAGE_TRANSFORM,
+    ]),
+    "spect": None,
+}
 
 
 def main():
@@ -90,32 +115,8 @@ def main():
         model_name = f"{DATASET}_{args.filelist}_{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
-    image_transform = transforms.Compose([
-        transforms.Grayscale(),
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.40], [0.15]),  # very rough estimation of the mean and standard deviation
-    ])
-
-    train_transforms = {
-        "video": transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomHorizontalFlip(),
-            image_transform,
-        ]),
-        "spect": None,
-    }
-
-    valid_transforms = {
-        "video": transforms.Compose([
-            transforms.ToPILImage(),
-            image_transform,
-        ]),
-        "spect": None,
-    }
-
-    train_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-train", transforms=train_transforms)
-    valid_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-valid", transforms=valid_transforms)
+    train_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-train", transforms=TRAIN_TRANSFORMS)
+    valid_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-valid", transforms=VALID_TRANSFORMS)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=True
