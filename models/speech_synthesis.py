@@ -124,3 +124,39 @@ class Tacotron2(nn.Module):
 
         y = torch.cat(y, dim=1)
         return self.post_process(y)
+
+
+    def predict2(self, x, t):
+        x = x.repeat_interleave(3, dim=1)
+        B, S, _ = x.shape
+
+        z = torch.zeros(B, 1, self.n_mel_channels).to(x.device)
+        h = torch.zeros(1, B, self.decoder_rnn_dim).to(x.device)
+        c = torch.zeros(1, B, self.decoder_rnn_dim).to(x.device)
+
+        y = []
+
+        for i in range(S):
+            # B, 1, D1
+            z = self.prenet(z)
+            # B, 1, Dx + D1
+            z = torch.cat((z, x[:, i].unsqueeze(1)), dim=2)
+            # 1, B, Dx + D1
+            z = z.permute(1, 0, 2)
+            # 1, B, D2
+            z, (h, c) = self.decoder_rnn(z, (h, c))
+            # 1, B, D2
+            z = F.dropout(z, self.p_decoder_dropout, self.training)
+            # S, D2, 1
+            z = z.permute(1, 0, 2)
+
+            # B, 1, Dx + D2
+            z = torch.cat((z, x[:, i].unsqueeze(1)), dim=2)
+            # B, 1, D3
+            z = self.linear_projection(z)
+
+            y.append(z)
+            z = t[:, i].unsqueeze(1)
+
+        y = torch.cat(y, dim=1)
+        return self.post_process(y)

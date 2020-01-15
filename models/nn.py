@@ -84,11 +84,20 @@ class Sven(nn.Module):
         return x
 
     def forward(self, x_y):
+        # Batch decoding with teacher forcing
         x, y = x_y
         x = self.encode(x)
         return self.decoder(x, y)
 
     def predict(self, x):
+        # Step-by-step decoding
         x = self.encode(x)
         _, y = self.decoder.predict(x)
+        return y
+
+    def predict2(self, x_y):
+        # Step-by-step decoding with auxilary information
+        x, y = x_y
+        x = self.encode(x)
+        _, y = self.decoder.predict2(x, y)
         return y
