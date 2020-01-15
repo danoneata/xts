@@ -4,6 +4,8 @@ import collections
 import enum
 import pdb
 
+from types import SimpleNamespace
+
 import numpy as np
 
 import torch
@@ -16,6 +18,9 @@ import src.dataset
 
 from hparams import hparams
 from models.speech_synthesis import Tacotron2
+
+
+get_same_padding = lambda s: (s - 1) // 2
 
 
 class Baseline(nn.Module):
@@ -47,30 +52,52 @@ class Baseline(nn.Module):
 
 
 class Sven(nn.Module):
-    def __init__(self):
+    def __init__(self, params):
         super(Sven, self).__init__()
-        # number of 3d convolutions filters
-        self.num_filters_3d = 64
+        self.params = SimpleNamespace(**params)
         # use 3d convolution to extract features in time
-        self.conv0_3d = nn.Conv3d(1, self.num_filters_3d, kernel_size=(3, 5, 5), stride=(1, 1, 1), padding=(1, 2, 2), bias=False)
+        self.conv0_3d = nn.Sequential(
+            nn.Conv3d(
+                1,  # single channel as the images are converted to gray-scale
+                self.params.conv3d_num_filters,
+                kernel_size=self.params.conv3d_kernel_size,
+                stride=(1, 1, 1),
+                padding=tuple(get_same_padding(s) for s in self.params.conv3d_kernel_size),
+                bias=False,
+            ),
+            nn.BatchNorm3d(self.params.conv3d_num_filters),
+            nn.ReLU(inplace=True),
+        )
         self.encoder = resnet18()
-        # use grayscale images
-        self.encoder.conv1 = nn.Conv2d(self.num_filters_3d, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-        # drop the last layer corresponind to the softmax classification
+        # update first layer of the resnet to match the `conv0_3d` layer
+        self.encoder.conv1 = nn.Conv2d(
+            self.params.conv3d_num_filters,
+            64,
+            kernel_size=(7, 7),
+            stride=(2, 2),
+            padding=(3, 3),
+            bias=False,
+        )
+        # drop the last layer of the resnet corresponding to the softmax classification
         self.encoder = nn.Sequential(*list(self.encoder.children())[:-1])
-        self.encoder_recurrent = nn.LSTM(hparams.encoder_embedding_dim, hparams.encoder_embedding_dim)
+        self.encoder_rnn = nn.LSTM(
+            input_size=hparams.encoder_embedding_dim,
+            hidden_size=hparams.encoder_embedding_dim,
+            num_layers=self.params.encoder_rnn_num_layers,
+            dropout=self.params.encoder_rnn_dropout,
+        )
         self.decoder = Tacotron2(hparams)
 
     def encode(self, x):
         B, S, H, W = x.shape
         # B, 1, S, H, W
         x = x.unsqueeze(1)
-        # B, num_filters_3d, S, H, W
+        # B, conv3d_num_filters, S, H, W
         x = self.conv0_3d(x)
-        # B, S, num_filters_3d, H, W
+        # B, S, conv3d_num_filters, H, W
         x = x.permute(0, 2, 1, 3, 4)
-        # BS, num_filters_3d, H, W
-        x = x.reshape(B * S, self.num_filters_3d, H, W)
+        # BS, conv3d_num_filters, H, W
+        x = x.reshape(B * S, self.params.conv3d_num_filters, H, W)
         # BS, Dx, 1, 1
         x = self.encoder(x)
         # B, S, Dx
@@ -78,7 +105,7 @@ class Sven(nn.Module):
         # S, B, Dx
         x = x.permute(1, 0, 2)
         # S, B, Dx
-        x, _ = self.encoder_recurrent(x)
+        x, _ = self.encoder_rnn(x)
         # B, S, Dx
         x = x.permute(1, 0, 2)
         return x
@@ -96,7 +123,7 @@ class Sven(nn.Module):
         return y
 
     def predict2(self, x_y):
-        # Step-by-step decoding with auxilary information
+        # Step-by-step decoding with auxilary information; equivalent to the `forward` method.
         x, y = x_y
         x = self.encode(x)
         _, y = self.decoder.predict2(x, y)

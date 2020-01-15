@@ -3,7 +3,11 @@ import os
 import os.path
 import pdb
 import sys
+import time
+
 import numpy as np
+
+from types import SimpleNamespace
 
 import torch
 import torch.nn as nn
@@ -24,7 +28,7 @@ from models import MODELS
 ROOT = os.environ.get("ROOT", "")
 
 SEED = 1337
-MAX_EPOCHS = 64
+MAX_EPOCHS = 1
 PATIENCE = 4
 BATCH_SIZE = 16
 LR_REDUCE_PARAMS = {
@@ -53,32 +57,30 @@ def collate_fn(batches):
     return video, spect
 
 
-IMAGE_TRANSFORM = transforms.Compose([
-    transforms.Grayscale(),
-    transforms.Resize((64, 64)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.40], [0.15]),  # very rough estimation of the mean and standard deviation
-])
+IMAGE_TRANSFORM = transforms.Compose(
+    [
+        transforms.Grayscale(),
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+        # rough estimation of the mean and standard deviation
+        transforms.Normalize([0.40], [0.15]),
+    ]
+)
 
 TRAIN_TRANSFORMS = {
-    "video": transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.RandomHorizontalFlip(),
-        IMAGE_TRANSFORM,
-    ]),
+    "video": transforms.Compose(
+        [transforms.ToPILImage(), transforms.RandomHorizontalFlip(), IMAGE_TRANSFORM,]
+    ),
     "spect": None,
 }
 
 VALID_TRANSFORMS = {
-    "video": transforms.Compose([
-        transforms.ToPILImage(),
-        IMAGE_TRANSFORM,
-    ]),
+    "video": transforms.Compose([transforms.ToPILImage(), IMAGE_TRANSFORM,]),
     "spect": None,
 }
 
 
-def main():
+def get_argument_parser():
     parser = argparse.ArgumentParser(description="Evaluate a given model")
     parser.add_argument(
         "--model-type",
@@ -88,10 +90,7 @@ def main():
         help="which model type to train",
     )
     parser.add_argument(
-        "--filelist",
-        type=str,
-        default="tiny2",
-        help="name of the filelist to use",
+        "--filelist", type=str, default="tiny2", help="name of the filelist to use",
     )
     parser.add_argument(
         "-m",
@@ -102,11 +101,12 @@ def main():
         help="path to model to load",
     )
     parser.add_argument("-v", "--verbose", action="count", help="verbosity level")
-    args = parser.parse_args()
+    return parser
 
-    print(args)
 
-    model = MODELS[args.model_type]()
+def train(args, trial, is_train=True, study=None):
+
+    model = MODELS[args.model_type](trial.parameters)
     if args.model is not None:
         model_path = args.model
         model_name = os.path.basename(args.model)
@@ -115,20 +115,16 @@ def main():
         model_name = f"{DATASET}_{args.filelist}_{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
+    # fmt: off
     train_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-train", transforms=TRAIN_TRANSFORMS)
     valid_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-valid", transforms=VALID_TRANSFORMS)
+    # fmt: on
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=True
-    )
+    kwargs = dict(batch_size=args.batch_size, collate_fn=collate_fn)
+    train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)
+    valid_loader = torch.utils.data.DataLoader(valid_dataset, shuffle=False, **kwargs)
 
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
-    )
-
-    # ignite_train = DataLoader(train_loader, shuffle=True)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=trial.parameters["lr"])  # 0.001
     mse_loss = nn.MSELoss()
 
     def loss(pred, true):
@@ -171,7 +167,6 @@ def main():
                 trainer.state.epoch, metrics["loss"]
             )
         )
-        # trainer.state.dataloader = model.ignite_random(train_loader, args.num_minibatches, args.minibatch_size, args.epoch_fraction)
 
     lr_reduce = lr_scheduler.ReduceLROnPlateau(
         optimizer, verbose=args.verbose, **LR_REDUCE_PARAMS
@@ -182,6 +177,12 @@ def main():
         loss = engine.state.metrics["loss"]
         lr_reduce.step(loss)
 
+    @evaluator.on(engine.Events.COMPLETED)
+    def terminate_study(engine):
+        """Stops underperforming trials."""
+        if study and study.should_trial_stop(trial=trial):
+            trainer.terminate()
+
     def score_function(engine):
         return -engine.state.metrics["loss"]
 
@@ -190,21 +191,40 @@ def main():
     )
     evaluator.add_event_handler(engine.Events.EPOCH_COMPLETED, early_stopping_handler)
 
-    checkpoint_handler = ignite.handlers.ModelCheckpoint(
-        "output/models/checkpoints",
-        model_name,
-        score_function=score_function,
-        n_saved=5,
-        require_empty=False,
-        create_dir=True,
-    )
-    evaluator.add_event_handler(
-        engine.Events.EPOCH_COMPLETED, checkpoint_handler, {"model": model}
-    )
+    if is_train:
+        checkpoint_handler = ignite.handlers.ModelCheckpoint(
+            "output/models/checkpoints",
+            model_name,
+            score_function=score_function,
+            n_saved=5,
+            require_empty=False,
+            create_dir=True,
+        )
+        evaluator.add_event_handler(
+            engine.Events.EPOCH_COMPLETED, checkpoint_handler, {"model": model}
+        )
 
-    trainer.run(train_loader, max_epochs=MAX_EPOCHS)
-    torch.save(model.state_dict(), model_path)
-    print("Model saved at:", model_path)
+    trainer.run(train_loader, max_epochs=args.max_epochs)
+
+    if is_train:
+        torch.save(model.state_dict(), model_path)
+        print("Model saved at:", model_path)
+
+    return evaluator.state.metrics["loss"]
+
+
+def main():
+    parser = get_argument_parser()
+    args = parser.parse_args()
+    args.batch_size = BATCH_SIZE
+    args.max_epochs = MAX_EPOCHS
+    print(args)
+    trial = SimpleNamespace(**{
+        "parameters": {
+            "lr": 0.001,
+        },
+    })
+    train(args, trial)
 
 
 if __name__ == "__main__":
