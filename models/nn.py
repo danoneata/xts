@@ -58,6 +58,7 @@ class Sven(nn.Module):
         self.encoder.conv1 = nn.Conv2d(self.num_filters_3d, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         # drop the last layer corresponind to the softmax classification
         self.encoder = nn.Sequential(*list(self.encoder.children())[:-1])
+        self.encoder_recurrent = nn.LSTM(hparams.encoder_embedding_dim, hparams.encoder_embedding_dim)
         self.decoder = Tacotron2(hparams)
 
     def encode(self, x):
@@ -73,7 +74,14 @@ class Sven(nn.Module):
         # BS, Dx, 1, 1
         x = self.encoder(x)
         # B, S, Dx
-        return x.squeeze().view(B, S, hparams.encoder_embedding_dim)
+        x = x.squeeze().view(B, S, hparams.encoder_embedding_dim)
+        # S, B, Dx
+        x = x.permute(1, 0, 2)
+        # S, B, Dx
+        x, _ = self.encoder_recurrent(x)
+        # B, S, Dx
+        x = x.permute(1, 0, 2)
+        return x
 
     def forward(self, x_y):
         x, y = x_y
