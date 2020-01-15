@@ -41,11 +41,11 @@ TACO_STFT = TacotronSTFT(
 )
 
 
-def audio_to_mel(audio):
+def audio_to_mel(audio, taco_stft=TACO_STFT):
     audio_norm = audio / MAX_WAV_VALUE
     audio_norm = audio_norm.unsqueeze(0)
     audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
-    melspec = TACO_STFT.mel_spectrogram(audio_norm)
+    melspec = taco_stft.mel_spectrogram(audio_norm)
     melspec = torch.squeeze(melspec, 0)
     return melspec
 
@@ -59,20 +59,20 @@ def get_mel_from_path(path: str, transform=None):
     return audio_to_mel(audio).T
 
 
-def mel_to_audio(mel):
+def mel_to_audio(mel, taco_stft=TACO_STFT):
     # TODO make it work in batch mode
     mel = mel.unsqueeze(0)
-    mel_decompress = TACO_STFT.spectral_de_normalize(mel)
+    mel_decompress = taco_stft.spectral_de_normalize(mel)
     mel_decompress = mel_decompress.transpose(1, 2).data.cpu()
 
     spec_from_mel_scaling = 1000
 
-    spec_from_mel = torch.mm(mel_decompress[0], TACO_STFT.mel_basis)
+    spec_from_mel = torch.mm(mel_decompress[0], taco_stft.mel_basis)
     spec_from_mel = spec_from_mel.transpose(0, 1).unsqueeze(0)
     spec_from_mel = spec_from_mel * spec_from_mel_scaling
 
     GRIFFIN_ITERS = 60
-    audio = griffin_lim(torch.autograd.Variable(spec_from_mel[:, :, :-1]), TACO_STFT.stft_fn, GRIFFIN_ITERS)
+    audio = griffin_lim(torch.autograd.Variable(spec_from_mel[:, :, :-1]), taco_stft.stft_fn, GRIFFIN_ITERS)
     audio = audio.squeeze()
     audio = audio.cpu().numpy()
 
