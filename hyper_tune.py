@@ -17,7 +17,7 @@ def get_study():
         sherpa.Continuous("encoder_rnn_dropout", [0.0, 0.3]),
         sherpa.Continuous("lr", [2e-4, 4e-3], scale="log"),
     ]
-    algorithm = sherpa.algorithms.RandomSearch(max_num_trials=4)
+    algorithm = sherpa.algorithms.RandomSearch(max_num_trials=16)
     stopping_rule = sherpa.algorithms.MedianStoppingRule(min_iterations=8, min_trials=4)
     return sherpa.Study(
         parameters=parameters,
