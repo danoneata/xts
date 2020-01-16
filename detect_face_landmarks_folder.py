@@ -38,14 +38,7 @@ def main():
 
     glob_path = os.path.join(args.input_path, "**/*.jpg")
 
-    for path in tqdm.tqdm(glob.glob(glob_path)):
-
-        try:
-            landmarks = detect_face_landmarks(detector, predictor, path)
-        except Exception:
-            print(path)
-            continue
-
+    def get_path_out(path):
         *_, subject, filename = path.split(os.path.sep)
         filename, _ = os.path.splitext(filename)
         filename = filename + ".json"
@@ -53,7 +46,24 @@ def main():
         output_dir = os.path.join("data", "face-landmarks", subject)
         os.makedirs(output_dir, exist_ok=True)
 
-        with open(os.path.join(output_dir, filename), 'w') as f:
+        return os.path.join(output_dir, filename)
+
+    for path in tqdm.tqdm(glob.glob(glob_path)):
+
+        path_out = get_path_out(path)
+
+        if os.path.exists(path_out):
+            continue
+
+        try:
+            landmarks = detect_face_landmarks(detector, predictor, path)
+        except Exception as e:
+            print(path)
+            print(e)
+            print()
+            continue
+
+        with open(path_out, 'w') as f:
             json.dump(landmarks, f, indent=True)
 
 
