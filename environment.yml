@@ -3,6 +3,11 @@ channels:
   - defaults
 dependencies:
     - python=3.7
+    - pytorch::pytorch>=1.0
+    - pytorch::torchvision
+    - pytorch::ignite
+    - cudatoolkit
     - numpy
     - matplotlib
     - scipy
+    - conda
