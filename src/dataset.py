@@ -21,62 +21,7 @@ import torch
 import torch.utils.data
 
 from hparams import hparams
-
-sys.path.insert(0, "tacotron2")
-from tacotron2.audio_processing import griffin_lim
-from tacotron2.layers import TacotronSTFT
-from tacotron2.utils import load_wav_to_torch
-
-
-MAX_WAV_VALUE = 32_768
-
-
-TACO_STFT = TacotronSTFT(
-    filter_length=hparams.filter_length,
-    hop_length=hparams.hop_length,
-    win_length=hparams.win_length,
-    sampling_rate=hparams.sampling_rate,
-    mel_fmin=hparams.mel_fmin,
-    mel_fmax=hparams.mel_fmax,
-)
-
-
-def audio_to_mel(audio, taco_stft=TACO_STFT):
-    audio_norm = audio / MAX_WAV_VALUE
-    audio_norm = audio_norm.unsqueeze(0)
-    audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
-    melspec = taco_stft.mel_spectrogram(audio_norm)
-    melspec = torch.squeeze(melspec, 0)
-    return melspec
-
-
-def get_mel_from_path(path: str, transform=None):
-    SAMPLING_RATE = 16_000
-    audio, sampling_rate = load_wav_to_torch(path)
-    assert sampling_rate == SAMPLING_RATE
-    if audio.ndim == 2:
-        audio = audio.mean(dim=1)
-    return audio_to_mel(audio).T
-
-
-def mel_to_audio(mel, taco_stft=TACO_STFT):
-    # TODO make it work in batch mode
-    mel = mel.unsqueeze(0)
-    mel_decompress = taco_stft.spectral_de_normalize(mel)
-    mel_decompress = mel_decompress.transpose(1, 2).data.cpu()
-
-    spec_from_mel_scaling = 1000
-
-    spec_from_mel = torch.mm(mel_decompress[0], taco_stft.mel_basis)
-    spec_from_mel = spec_from_mel.transpose(0, 1).unsqueeze(0)
-    spec_from_mel = spec_from_mel * spec_from_mel_scaling
-
-    GRIFFIN_ITERS = 60
-    audio = griffin_lim(torch.autograd.Variable(spec_from_mel[:, :, :-1]), taco_stft.stft_fn, GRIFFIN_ITERS)
-    audio = audio.squeeze()
-    audio = audio.cpu().numpy()
-
-    return audio
+from audio import AUDIO_PROCESSING
 
 
 class xTSSample(object):
@@ -122,10 +67,10 @@ class xTSSample(object):
 
         return frames
 
-    def load(self, transforms):
+    def load(self, transforms, audio_proc):
         _get_path = lambda m, e: os.path.join(self.paths[m], self.person, self.file + e)
         self.video = self.get_video_lips(_get_path("face", ".json"), _get_path("video", ".mpg"), transforms["video"])
-        self.spect = get_mel_from_path(_get_path("audio", ".wav"), transforms["spect"])
+        self.spect = audio_proc.audio_to_mel(audio_proc.load_audio(_get_path("audio", ".wav")))
 
 
 class xTSDataset(torch.utils.data.Dataset):
@@ -138,6 +83,8 @@ class xTSDataset(torch.utils.data.Dataset):
             type (string): name of the txt file containing the data split
         """
         self.root = root
+        self.SAMPLING_RATE = 16_000
+
         self.transforms = transforms
 
         with open(os.path.join(self.root, "filelists", type + ".txt"), "r") as f:
@@ -145,6 +92,7 @@ class xTSDataset(torch.utils.data.Dataset):
 
         self.size = len(file_folder)
         self.file, self.folder = zip(*file_folder)
+        self.audio_processing = AUDIO_PROCESSING[hparams.audio_processing](self.SAMPLING_RATE)
 
     def __len__(self):
         return self.size
@@ -154,6 +102,6 @@ class xTSDataset(torch.utils.data.Dataset):
             raise IndexError
 
         stream = xTSSample(self.root, self.folder[idx], self.file[idx])
-        stream.load(self.transforms)
+        stream.load(self.transforms, self.audio_processing)
 
         return stream.video, stream.spect

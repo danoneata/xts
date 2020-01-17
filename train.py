@@ -71,12 +71,10 @@ TRAIN_TRANSFORMS = {
     "video": transforms.Compose(
         [transforms.ToPILImage(), transforms.RandomHorizontalFlip(), IMAGE_TRANSFORM,]
     ),
-    "spect": None,
 }
 
 VALID_TRANSFORMS = {
     "video": transforms.Compose([transforms.ToPILImage(), IMAGE_TRANSFORM,]),
-    "spect": None,
 }
 
 

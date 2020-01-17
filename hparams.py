@@ -1,15 +1,8 @@
 from types import SimpleNamespace
 
 hparams = SimpleNamespace(
-    # Audio Parameters
-    max_wav_value=32768.0,
-    sampling_rate=16000,
-    filter_length=1024,
-    hop_length=212,  # ensures that a video frame corresponds to three spectrogram frames
-    win_length=1024,
+    audio_processing="deep-conv-tts",
     n_mel_channels=80,
-    mel_fmin=0.0,
-    mel_fmax=8000.0,
     # Encoder parameters
     encoder_kernel_size=5,
     encoder_n_convolutions=3,
