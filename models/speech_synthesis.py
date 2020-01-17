@@ -1,6 +1,9 @@
 import pdb
 import sys
 
+from toolz import concat, partition, take
+
+import numpy as np
 import torch
 
 from torch import nn
@@ -14,8 +17,11 @@ from tacotron2.model import Prenet, Postnet
 class Tacotron2(nn.Module):
     def __init__(self, hparams):
         super(Tacotron2, self).__init__()
+        self.len_inp = 75
+        self.len_out = 239
+        self.out_inp_factor = int(np.ceil(self.len_out / self.len_inp))
+
         self.n_mel_channels = hparams.n_mel_channels
-        self.n_frames_per_step = hparams.n_frames_per_step
         self.encoder_embedding_dim = hparams.encoder_embedding_dim
         self.decoder_rnn_dim = hparams.decoder_rnn_dim
         self.prenet_dim = hparams.prenet_dim
@@ -23,7 +29,7 @@ class Tacotron2(nn.Module):
         self.p_decoder_dropout = hparams.p_decoder_dropout
 
         self.prenet = Prenet(
-            hparams.n_mel_channels * hparams.n_frames_per_step,
+            hparams.n_mel_channels,
             [hparams.prenet_dim, hparams.prenet_dim],
         )
 
@@ -34,7 +40,7 @@ class Tacotron2(nn.Module):
 
         self.linear_projection = LinearNorm(
             hparams.decoder_rnn_dim + hparams.encoder_embedding_dim,
-            hparams.n_mel_channels * hparams.n_frames_per_step,
+            hparams.n_mel_channels,
         )
 
         self.postnet = Postnet(hparams)
@@ -54,6 +60,24 @@ class Tacotron2(nn.Module):
         z = z.permute(0, 2, 1)
         return z, z_post
 
+    def get_selected_indices(self):
+        indices = range(self.len_inp * self.out_inp_factor)
+        num_extra_elems = self.out_inp_factor * self.len_inp - self.len_out
+        selected_groups = set(np.random.choice(self.len_inp, num_extra_elems, replace=False))
+        selected_indices = list(concat(
+            take(self.out_inp_factor - 1, group) if i in selected_groups else group
+            for i, group in enumerate(partition(self.out_inp_factor, indices))
+        ))
+        return selected_indices
+
+    def upsample_video(self, x):
+        # Upsamples the video sequence to the size of audio sequence by
+        # repeating the feature frames
+        # return x.repeat_interleave(3, dim=1)
+        x = x.repeat_interleave(self.out_inp_factor, dim=1)
+        i = self.get_selected_indices()
+        return x[:, i]
+
     def forward(self, x, y):
         # Glossary:
         # B →  batch size
@@ -70,8 +94,7 @@ class Tacotron2(nn.Module):
         z = self.prenet(z)
 
         # B, S, Dx
-        # upsamples the `x` sequence to the size of `y` by repeating elements
-        x = x.repeat_interleave(3, dim=1)
+        x = self.upsample_video(x)
         # B, S, Dx + D1
         z = torch.cat((z, x), dim=2)
 
@@ -92,7 +115,7 @@ class Tacotron2(nn.Module):
         return self.post_process(z)
 
     def predict(self, x):
-        x = x.repeat_interleave(3, dim=1)
+        x = self.upsample_video(x)
         B, S, _ = x.shape
 
         z = torch.zeros(B, 1, self.n_mel_channels).to(x.device)
@@ -127,7 +150,7 @@ class Tacotron2(nn.Module):
 
 
     def predict2(self, x, t):
-        x = x.repeat_interleave(3, dim=1)
+        x = self.upsample_video(x)
         B, S, _ = x.shape
 
         z = torch.zeros(B, 1, self.n_mel_channels).to(x.device)

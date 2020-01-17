@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 hparams = SimpleNamespace(
-    audio_processing="deep-conv-tts",
+    audio_processing="deep-conv-tts-200",
     n_mel_channels=80,
     # Encoder parameters
     encoder_kernel_size=5,

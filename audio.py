@@ -136,4 +136,5 @@ class DeepConvTTS(AudioProcessing):
 AUDIO_PROCESSING = {
     "tacotron": lambda sr: Tacotron(sampling_rate=sr, hop_length=212),
     "deep-conv-tts": lambda sr: DeepConvTTS(sampling_rate=sr, hop_length=212),
+    "deep-conv-tts-200": lambda sr: DeepConvTTS(sampling_rate=sr, hop_length=200),
 }

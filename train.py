@@ -30,7 +30,7 @@ ROOT = os.environ.get("ROOT", "")
 SEED = 1337
 MAX_EPOCHS = 1
 PATIENCE = 4
-BATCH_SIZE = 16
+BATCH_SIZE = 12
 LR_REDUCE_PARAMS = {
     "factor": 0.2,
     "patience": 2,
