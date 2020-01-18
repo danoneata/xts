@@ -93,11 +93,11 @@ class DeepConvTTS(AudioProcessing):
     https://github.com/Kyubyong/dc_tts
     
     """
-    def __init__(self, sampling_rate, hop_length=None):
+    def __init__(self, sampling_rate, hop_length=None, win_length=None):
         self.sampling_rate = sampling_rate
         self.hop_length = hop_length or int(sampling_rate * 0.0125)
-        self.win_length = int(sampling_rate * 0.05)
-        self.n_fft = 2048
+        self.win_length = win_length or int(sampling_rate * 0.05)
+        self.n_fft = 1024
         self.preemphasis = 0.97
         self.ref_db = 20
         self.max_db = 100
@@ -134,7 +134,9 @@ class DeepConvTTS(AudioProcessing):
 
 
 AUDIO_PROCESSING = {
-    "tacotron": lambda sr: Tacotron(sampling_rate=sr, hop_length=212),
-    "deep-conv-tts": lambda sr: DeepConvTTS(sampling_rate=sr, hop_length=212),
-    "deep-conv-tts-200": lambda sr: DeepConvTTS(sampling_rate=sr, hop_length=200),
+    "deep-conv-tts": lambda sr: DeepConvTTS(sampling_rate=sr),
+    # modules for which the sequence length is a multiple of 3 of the video sequence
+    # (works for the GRID dataset and for a sampling rate of 16 kHz)
+    "tacotron-3": lambda sr: Tacotron(sampling_rate=sr, hop_length=212),
+    "deep-conv-tts-3": lambda sr: DeepConvTTS(sampling_rate=sr, hop_length=212),
 }

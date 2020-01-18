@@ -28,9 +28,9 @@ from models import MODELS
 ROOT = os.environ.get("ROOT", "")
 
 SEED = 1337
-MAX_EPOCHS = 1
+MAX_EPOCHS = 128
 PATIENCE = 4
-BATCH_SIZE = 12
+BATCH_SIZE = 8
 LR_REDUCE_PARAMS = {
     "factor": 0.2,
     "patience": 2,
@@ -81,6 +81,7 @@ VALID_TRANSFORMS = {
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Evaluate a given model")
     parser.add_argument(
+        "-m",
         "--model-type",
         type=str,
         required=True,
@@ -91,8 +92,7 @@ def get_argument_parser():
         "--filelist", type=str, default="tiny2", help="name of the filelist to use",
     )
     parser.add_argument(
-        "-m",
-        "--model",
+        "--model-path",
         type=str,
         default=None,
         required=False,
@@ -105,9 +105,9 @@ def get_argument_parser():
 def train(args, trial, is_train=True, study=None):
 
     model = MODELS[args.model_type](trial.parameters)
-    if args.model is not None:
-        model_path = args.model
-        model_name = os.path.basename(args.model)
+    if args.model_path is not None:
+        model_path = args.model_path
+        model_name = os.path.basename(args.model_path)
         model.load(model_path)
     else:
         model_name = f"{DATASET}_{args.filelist}_{args.model_type}"
@@ -216,12 +216,13 @@ def main():
     args = parser.parse_args()
     args.batch_size = BATCH_SIZE
     args.max_epochs = MAX_EPOCHS
-    print(args)
     trial = SimpleNamespace(**{
         "parameters": {
-            "lr": 0.001,
+            "lr": 5e-4,
         },
     })
+    print(args)
+    print(trial)
     train(args, trial)
 
 
