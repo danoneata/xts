@@ -156,7 +156,7 @@ def train(args, trial, is_train=True, study=None):
             )
         )
 
-    @trainer.on(engine.Events.EPOCH_COMPLETED)
+    @trainer.on(engine.Events.ITERATION_COMPLETED(every=1024))
     def log_validation_loss(trainer):
         evaluator.run(valid_loader)
         metrics = evaluator.state.metrics
