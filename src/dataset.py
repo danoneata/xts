@@ -102,8 +102,13 @@ class xTSDataset(torch.utils.data.Dataset):
         if idx >= self.size:
             raise IndexError
 
-        stream = xTSSample(self.root, self.folder[idx], self.file[idx])
-        stream.load(self.transforms, self.audio_processing)
-        id_ = self.speaker_to_id[stream.person]
+        try:
+            stream = xTSSample(self.root, self.folder[idx], self.file[idx])
+            id_ = self.speaker_to_id[stream.person]
+            stream.load(self.transforms, self.audio_processing)
 
-        return stream.video, stream.spect, id_
+            return stream.video, stream.spect, id_
+        except Exception as e:
+            print(e)
+            print(id_)
+            return None
