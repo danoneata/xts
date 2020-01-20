@@ -41,6 +41,7 @@ DATASET = "grid"
 def collate_fn(batches):
     videos = [batch[0] for batch in batches]
     spects = [batch[1] for batch in batches]
+    ids = [batch[2] for batch in batches]
 
     max_v = max(video.shape[0] for video in videos)
     pad_v = lambda video: (0, 0, 0, 0, 0, max_v - video.shape[0])
@@ -53,8 +54,9 @@ def collate_fn(batches):
 
     video = torch.stack(videos)
     spect = torch.stack(spects)
+    ids = torch.tensor(ids).long()
 
-    return video, spect
+    return video, spect, ids
 
 
 IMAGE_TRANSFORM = transforms.Compose(
@@ -132,10 +134,11 @@ def train(args, trial, is_train=True, study=None):
     device = "cuda"
 
     def prepare_batch(batch, device, non_blocking):
-        batch_x, batch_y = batch
+        batch_x, batch_y, ids = batch
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
-        return (batch_x, batch_y), batch_y
+        ids = ids.to(device)
+        return (batch_x, batch_y, ids), batch_y
 
     trainer = engine.create_supervised_trainer(
         model, optimizer, loss, device=device, prepare_batch=prepare_batch

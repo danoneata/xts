@@ -86,9 +86,17 @@ class Sven(nn.Module):
             num_layers=self.params.encoder_rnn_num_layers,
             dropout=self.params.encoder_rnn_dropout,
         )
+        self.encoder_embedding_dim = hparams.encoder_embedding_dim
+        if "speaker_embedding_dim" in params and params["speaker_embedding_dim"] > 0:
+            num_embeddings = 14
+            speaker_embedding_dim = params["speaker_embedding_dim"]
+            self.speaker_embedding = nn.Embedding(num_embeddings, speaker_embedding_dim)
+            hparams.encoder_embedding_dim = hparams.encoder_embedding_dim + speaker_embedding_dim
+        else:
+            self.speaker_embedding= None
         self.decoder = Tacotron2(hparams)
 
-    def encode(self, x):
+    def encode(self, x, ids):
         B, S, H, W = x.shape
         # B, 1, S, H, W
         x = x.unsqueeze(1)
@@ -98,33 +106,41 @@ class Sven(nn.Module):
         x = x.permute(0, 2, 1, 3, 4)
         # BS, conv3d_num_filters, H, W
         x = x.reshape(B * S, self.params.conv3d_num_filters, H, W)
-        # BS, Dx, 1, 1
+        # BS, D, 1, 1
         x = self.encoder(x)
-        # B, S, Dx
-        x = x.squeeze().view(B, S, hparams.encoder_embedding_dim)
-        # S, B, Dx
+        # B, S, D
+        x = x.squeeze().view(B, S, self.encoder_embedding_dim)
+        # S, B, D
         x = x.permute(1, 0, 2)
-        # S, B, Dx
+        # S, B, D
         x, _ = self.encoder_rnn(x)
-        # B, S, Dx
+        # B, S, D
         x = x.permute(1, 0, 2)
+        if self.speaker_embedding:
+            # B, E
+            e = self.speaker_embedding(ids)
+            # B, S, E
+            e = e.unsqueeze(1).repeat(1, S, 1)
+            # B, S, E + D
+            x = torch.cat((x, e), dim=2)
         return x
 
-    def forward(self, x_y):
+    def forward(self, inp):
         # Batch decoding with teacher forcing
-        x, y = x_y
-        x = self.encode(x)
+        x, y, ids = inp
+        x = self.encode(x, ids)
         return self.decoder(x, y)
 
-    def predict(self, x):
+    def predict(self, inp):
         # Step-by-step decoding
-        x = self.encode(x)
+        x, ids = inp
+        x = self.encode(x, ids)
         _, y = self.decoder.predict(x)
         return y
 
-    def predict2(self, x_y):
+    def predict2(self, inp):
         # Step-by-step decoding with auxilary information; equivalent to the `forward` method.
-        x, y = x_y
+        x, y, ids = inp
         x = self.encode(x)
         _, y = self.decoder.predict2(x, y)
         return y

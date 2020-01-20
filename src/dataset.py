@@ -93,6 +93,7 @@ class xTSDataset(torch.utils.data.Dataset):
         self.size = len(file_folder)
         self.file, self.folder = zip(*file_folder)
         self.audio_processing = AUDIO_PROCESSING[hparams.audio_processing](self.SAMPLING_RATE)
+        self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.folder)))}
 
     def __len__(self):
         return self.size
@@ -103,5 +104,6 @@ class xTSDataset(torch.utils.data.Dataset):
 
         stream = xTSSample(self.root, self.folder[idx], self.file[idx])
         stream.load(self.transforms, self.audio_processing)
+        id_ = self.speaker_to_id[stream.person]
 
-        return stream.video, stream.spect
+        return stream.video, stream.spect, id_
