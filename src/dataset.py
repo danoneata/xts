@@ -104,11 +104,12 @@ class xTSDataset(torch.utils.data.Dataset):
 
         try:
             stream = xTSSample(self.root, self.folder[idx], self.file[idx])
-            id_ = self.speaker_to_id[stream.person]
             stream.load(self.transforms, self.audio_processing)
+            id_ = self.speaker_to_id[stream.person]
 
             return stream.video, stream.spect, id_
         except Exception as e:
             print(e)
-            print(id_)
+            print(self.folder[idx])
+            print(self.file[idx])
             return None

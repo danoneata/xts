@@ -39,9 +39,9 @@ DATASET = "grid"
 
 
 def collate_fn(batches):
-    videos = [batch[0] for batch in batches]
-    spects = [batch[1] for batch in batches]
-    ids = [batch[2] for batch in batches]
+    videos = [batch[0] for batch in batches if batch]
+    spects = [batch[1] for batch in batches if batch]
+    ids = [batch[2] for batch in batches if batch]
 
     max_v = max(video.shape[0] for video in videos)
     pad_v = lambda video: (0, 0, 0, 0, 0, max_v - video.shape[0])
