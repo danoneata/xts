@@ -29,4 +29,13 @@ MODELS = {
             speaker_embedding_dim=32,
         )
     ),
+    "bjorn": lambda *args, **kwargs: models.nn.Bjorn(
+        dict(
+            conv3d_num_filters=128,
+            conv3d_kernel_size=(5, 5, 5),
+            encoder_rnn_num_layers=2,
+            encoder_rnn_dropout=0.1,
+            speaker_embedding_dim=32,
+        )
+    ),
 }

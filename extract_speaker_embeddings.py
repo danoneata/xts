@@ -127,7 +127,7 @@ def main():
 
     feats = extract_features(paths, args)
 
-    path_emb = "output/speaker-embeddings/{}.npz".format(args.filelist)
+    path_emb = "{}/speaker-embeddings/{}.npz".format(args.ROOT, args.filelist)
     np.savez(path_emb, files_and_folders=files_and_folders, feats=feats)
 
     if args.to_evaluate:

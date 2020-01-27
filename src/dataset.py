@@ -20,8 +20,50 @@ from moviepy.editor import *
 import torch
 import torch.utils.data
 
+from torch.utils.data._utils.collate import default_collate
+
 from hparams import hparams
 from audio import AUDIO_PROCESSING
+
+
+def prepare_batch_2(batch, device, non_blocking):
+    batch_x, batch_y = batch
+    batch_x = batch_x.to(device)
+    batch_y = batch_y.to(device)
+    return (batch_x, batch_y), batch_y
+
+
+def prepare_batch_3(batch, device, non_blocking):
+    batch_x, batch_y, extra = batch
+    batch_x = batch_x.to(device)
+    batch_y = batch_y.to(device)
+    extra = extra.to(device)
+    return (batch_x, batch_y, extra), batch_y
+
+
+def collate_fn(batches):
+    videos = [batch[0] for batch in batches if batch[0] is not None]
+    spects = [batch[1] for batch in batches if batch[1] is not None]
+
+    max_v = max(video.shape[0] for video in videos)
+    pad_v = lambda video: (0, 0, 0, 0, 0, max_v - video.shape[0])
+
+    max_s = max(spect.shape[0] for spect in spects)
+    pad_s = lambda spect: (0, 0, 0, max_s - spect.shape[0])
+
+    videos = [F.pad(video, pad=pad_v(video)) for video in videos]
+    spects = [F.pad(spect, pad=pad_s(spect)) for spect in spects]
+
+    video = torch.stack(videos)
+    spect = torch.stack(spects)
+
+    if len(batches[0]) == 2:
+        return video, spect
+    else:
+        extra = [batch[2:] for batch in batches if batch[0] is not None]
+        extra = default_collate(extra)
+        extra = torch.cat(extra)
+        return video, spect, extra
 
 
 class xTSSample(object):
@@ -93,7 +135,6 @@ class xTSDataset(torch.utils.data.Dataset):
         self.size = len(file_folder)
         self.file, self.folder = zip(*file_folder)
         self.audio_processing = AUDIO_PROCESSING[hparams.audio_processing](self.SAMPLING_RATE)
-        self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.folder)))}
 
     def __len__(self):
         return self.size
@@ -103,13 +144,37 @@ class xTSDataset(torch.utils.data.Dataset):
             raise IndexError
 
         try:
-            stream = xTSSample(self.root, self.folder[idx], self.file[idx])
-            stream.load(self.transforms, self.audio_processing)
-            id_ = self.speaker_to_id[stream.person]
-
-            return stream.video, stream.spect, id_
+            self.stream = xTSSample(self.root, self.folder[idx], self.file[idx])
+            self.stream.load(self.transforms, self.audio_processing)
+            return self.stream.video, self.stream.spect
         except Exception as e:
             print(e)
-            print(self.folder[idx])
-            print(self.file[idx])
-            return None
+            print(self.folder[idx], self.file[idx])
+            return None, None
+
+
+class xTSDatasetSpeakerId(xTSDataset):
+    def __init__(self, *args, **kwargs):
+        super(xTSDatasetSpeakerId, self).__init__(*args, **kwargs)
+        self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.folder)))}
+
+    def __getitem__(self, idx: int):
+        video, spect = super().__getitem__(idx)
+        id_ = self.speaker_to_id[self.stream.person]
+        id_ = torch.tensor(id_).long()
+        return video, spect, id_
+
+
+class xTSDatasetSpeakerEmbedding(xTSDataset):
+    def __init__(self, *args, **kwargs):
+        super(xTSDatasetSpeakerEmbedding, self).__init__(*args, **kwargs)
+        data_embedding = np.load(os.path.join(self.root, "speaker-embeddings/full.npz"))
+        self.speaker_embeddings = data_embedding["feats"]
+        self.file_to_index = {f: i for i, (f, _) in enumerate(data_embedding["files_and_folders"])}
+
+    def __getitem__(self, idx: int):
+        video, spect = super().__getitem__(idx)
+        i = self.file_to_index[self.file[idx]]
+        embedding = self.speaker_embeddings[i]
+        embedding = torch.tensor(embedding).float()
+        return video, spect, embedding

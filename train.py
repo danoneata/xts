@@ -22,12 +22,15 @@ import ignite.engine as engine
 import ignite.handlers
 
 import src.dataset
+from src.dataset import collate_fn, prepare_batch_2, prepare_batch_3
 
 from models import MODELS
+from models.nn import SpeakerInfo
 
 ROOT = os.environ.get("ROOT", "")
 
 SEED = 1337
+EVERY_K_ITERS = 512
 MAX_EPOCHS = 128
 PATIENCE = 4
 BATCH_SIZE = 8
@@ -36,27 +39,6 @@ LR_REDUCE_PARAMS = {
     "patience": 2,
 }
 DATASET = "grid"
-
-
-def collate_fn(batches):
-    videos = [batch[0] for batch in batches if batch]
-    spects = [batch[1] for batch in batches if batch]
-    ids = [batch[2] for batch in batches if batch]
-
-    max_v = max(video.shape[0] for video in videos)
-    pad_v = lambda video: (0, 0, 0, 0, 0, max_v - video.shape[0])
-
-    max_s = max(spect.shape[0] for spect in spects)
-    pad_s = lambda spect: (0, 0, 0, max_s - spect.shape[0])
-
-    videos = [F.pad(video, pad=pad_v(video)) for video in videos]
-    spects = [F.pad(spect, pad=pad_s(spect)) for spect in spects]
-
-    video = torch.stack(videos)
-    spect = torch.stack(spects)
-    ids = torch.tensor(ids).long()
-
-    return video, spect, ids
 
 
 IMAGE_TRANSFORM = transforms.Compose(
@@ -115,9 +97,22 @@ def train(args, trial, is_train=True, study=None):
         model_name = f"{DATASET}_{args.filelist}_{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
+    # Select the dataset accoring to the type of speaker information encoded in the model.
+    if model.speaker_info is SpeakerInfo.NOTHING:
+        Dataset = src.dataset.xTSDataset
+        prepare_batch = prepare_batch_2
+    elif model.speaker_info is SpeakerInfo.ID:
+        Dataset = src.dataset.xTSDatasetSpeakerId
+        prepare_batch = prepare_batch_3
+    elif model.speaker_info is SpeakerInfo.EMBEDDING:
+        Dataset = src.dataset.xTSDatasetSpeakerEmbedding
+        prepare_batch = prepare_batch_3
+    else:
+        assert False, "Unknown speaker info"
+
     # fmt: off
-    train_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-train", transforms=TRAIN_TRANSFORMS)
-    valid_dataset = src.dataset.xTSDataset(ROOT, args.filelist + "-valid", transforms=VALID_TRANSFORMS)
+    train_dataset = Dataset(ROOT, args.filelist + "-train", transforms=TRAIN_TRANSFORMS)
+    valid_dataset = Dataset(ROOT, args.filelist + "-valid", transforms=VALID_TRANSFORMS)
     # fmt: on
 
     kwargs = dict(batch_size=args.batch_size, collate_fn=collate_fn)
@@ -132,13 +127,6 @@ def train(args, trial, is_train=True, study=None):
         return mse_loss(pred1, true) + mse_loss(pred2, true)
 
     device = "cuda"
-
-    def prepare_batch(batch, device, non_blocking):
-        batch_x, batch_y, ids = batch
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
-        ids = ids.to(device)
-        return (batch_x, batch_y, ids), batch_y
 
     trainer = engine.create_supervised_trainer(
         model, optimizer, loss, device=device, prepare_batch=prepare_batch
@@ -159,7 +147,7 @@ def train(args, trial, is_train=True, study=None):
             )
         )
 
-    @trainer.on(engine.Events.ITERATION_COMPLETED(every=1024))
+    @trainer.on(engine.Events.ITERATION_COMPLETED(every=EVERY_K_ITERS))
     def log_validation_loss(trainer):
         evaluator.run(valid_loader)
         metrics = evaluator.state.metrics
@@ -190,19 +178,23 @@ def train(args, trial, is_train=True, study=None):
     early_stopping_handler = ignite.handlers.EarlyStopping(
         patience=PATIENCE, score_function=score_function, trainer=trainer
     )
-    evaluator.add_event_handler(engine.Events.EPOCH_COMPLETED, early_stopping_handler)
+    evaluator.add_event_handler(engine.Events.COMPLETED, early_stopping_handler)
 
     if is_train:
+        def global_step_transform(*args):
+            return trainer.state.iteration // EVERY_K_ITERS
         checkpoint_handler = ignite.handlers.ModelCheckpoint(
             "output/models/checkpoints",
             model_name,
+            score_name="objective",
             score_function=score_function,
             n_saved=5,
             require_empty=False,
             create_dir=True,
+            global_step_transform=global_step_transform,
         )
         evaluator.add_event_handler(
-            engine.Events.EPOCH_COMPLETED, checkpoint_handler, {"model": model}
+            engine.Events.COMPLETED, checkpoint_handler, {"model": model}
         )
 
     trainer.run(train_loader, max_epochs=args.max_epochs)
