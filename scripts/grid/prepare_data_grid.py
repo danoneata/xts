@@ -8,7 +8,7 @@ from itertools import groupby
 from data import load_sentence
 
 
-I = "data"
+I = "data/grid"
 O = "data/kaldi"
 
 
