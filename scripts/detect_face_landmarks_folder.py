@@ -11,7 +11,9 @@ import dlib
 import tqdm
 
 
-SHAPE_PREDICTOR_PATH = "/home/doneata/src/dlib-models/shape_predictor_68_face_landmarks.dat"
+SHAPE_PREDICTOR_PATH = (
+    "/home/doneata/src/dlib-models/shape_predictor_68_face_landmarks.dat"
+)
 
 
 def shape_to_list(shape):
@@ -28,22 +30,38 @@ def detect_face_landmarks(detector, predictor, path):
     return landmarks
 
 
+GLOB_PATTERN = {
+    "grid": "**/*.jpg",
+    "lrw": "**/**/*.jpg",
+}
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--input-path", required=True, help="path to images")
+    parser = argparse.ArgumentParser(
+        description="""Extracts face landmarks for the frames in a dataset.
+        This script assumes that the frames are located at `data/$DATASET/frames`
+        and it outputs the face landmarks at `data/$DATA/face-landmarks`."""
+    )
+    parser.add_argument(
+        "-d",
+        "--dataset",
+        required=True,
+        choices=GLOB_PATTERN,
+        help="name of the dataset",
+    )
     args = parser.parse_args()
 
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor(SHAPE_PREDICTOR_PATH)
 
-    glob_path = os.path.join(args.input_path, "**/*.jpg")
+    glob_path = os.path.join("data", args.dataset, "frames", GLOB_PATTERN[args.dataset])
 
     def get_path_out(path):
-        *_, subject, filename = path.split(os.path.sep)
+        _, _, _, *folders, filename = path.split(os.path.sep)
         filename, _ = os.path.splitext(filename)
         filename = filename + ".json"
 
-        output_dir = os.path.join("data", "face-landmarks", subject)
+        output_dir = os.path.join("data", args.dataset, "face-landmarks", *folders)
         os.makedirs(output_dir, exist_ok=True)
 
         return os.path.join(output_dir, filename)
@@ -63,7 +81,7 @@ def main():
             print()
             continue
 
-        with open(path_out, 'w') as f:
+        with open(path_out, "w") as f:
             json.dump(landmarks, f, indent=True)
 
 
