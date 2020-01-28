@@ -14,6 +14,7 @@ Sample = namedtuple("Sample", "key video_path audio_path frame_path speaker sent
 DATA_DIR = "data"
 FILELISTS = {
     "tiny": os.path.join(DATA_DIR, "filelists", "tiny.txt"),
+    "tiny-train": os.path.join(DATA_DIR, "filelists", "tiny-train.txt"),
     "small": os.path.join(DATA_DIR, "filelists", "small.txt"),
     "full": os.path.join(DATA_DIR, "filelists", "full.txt"),
 }

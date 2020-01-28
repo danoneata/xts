@@ -1,4 +1,5 @@
 """Prepares data for the deep-lip-reading code."""
+import argparse
 import itertools
 import os
 import pdb
@@ -58,11 +59,16 @@ def get_box_around(point):
 
 def main():
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("split", help="key of the data split (e.g., tiny)")
+    parser.add_argument("--temporal", default="word", choices="word sentence", help="temporal split")
+    args = parser.parse_args()
+
     split = sys.argv[1]
-    data = load_data(split)
+    data = load_data(args.split)
     annotations = []
 
-    for i, sample in enumerate(load_data(split)):
+    for i, sample in enumerate(load_data(args.split)):
 
         print(i, sample.key, sample.speaker, sample.sentence, end=" ")
 
@@ -86,28 +92,36 @@ def main():
         words = sample.sentence.split()
         frames_group = itertools.groupby(enumerate(frames), key=get_segment1)
 
-        for j, (word, start, end) in enumerate(sample.video_alignment):
+        video_dir = os.path.join(PATH, f"grid-{args.temporal}")
 
-            if word == "sil":
-                continue
+        if args.temporal == "word":
+            for j, (word, start, end) in enumerate(sample.video_alignment):
 
-            path = os.path.join(PATH, "grid", sample.key + f"_{j:03d}" + ".mp4")
-            annotations.append((path, word))
+                if word == "sil":
+                    continue
 
-            s = int(start.to_frame())
-            e = int(end.to_frame()) + 1
+                path = os.path.join(video_dir, sample.key + f"_{j:03d}" + ".mp4")
+                annotations.append((path, word))
 
-            if e - s == 1:
-                e += 1
+                s = int(start.to_frame())
+                e = int(end.to_frame()) + 1
 
-            print(f"\t{word:10s} → {s:3d}:{e:3d}", end=" ")
-            write_video(frames[s: e], path)
-            print()
+                if e - s == 1:
+                    e += 1
 
-        if i >= 30:
-            break
+                print(f"\t{word:10s} → {s:3d}:{e:3d}", end=" ")
+                write_video(frames[s: e], path)
+                print()
 
-    with open(os.path.join(PATH, f"grid-{split}.txt"), "w") as f:
+        elif args.temporal == "sentence":
+                path = os.path.join(video_dir, sample.key + ".mp4")
+                words = (w for w, _, _ in sample.video_alignment if w != "sil")
+                sentence = " ".join(words)
+                annotations.append((path, sentence))
+                print(f"\t{sentence}")
+                write_video(frames, path)
+
+    with open(os.path.join(PATH, f"grid-{args.split}-{args.temporal}.txt"), "w") as f:
         for path, word in annotations:
             f.write(f"{path}, {word.upper()}\n")
 
