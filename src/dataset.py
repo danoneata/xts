@@ -82,7 +82,7 @@ class PathLoader:
 
 
 class GridPathLoader(PathLoader):
-    def __init__(self, root:str, filelist: str):
+    def __init__(self, root: str, filelist: str):
         super(GridPathLoader, self).__init__(root, "grid", filelist)
         extensions = {
             "face": ".json",
@@ -91,10 +91,15 @@ class GridPathLoader(PathLoader):
         }
         file_subject = [i.split() for i in self.ids]
         self.paths = {
-            k: [os.path.join(self.folders[k], s, f + extensions[k]) for f, s in file_subject]
+            k: [
+                os.path.join(self.folders[k], s, f + extensions[k])
+                for f, s in file_subject
+            ]
             for k in ("face", "audio", "video")
         }
-        self.paths["speaker-embeddings"] = os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
+        self.paths["speaker-embeddings"] = os.path.join(
+            self.folders["base"], "speaker-embeddings", filelist + ".npz"
+        )
         # Speaker information
         self.speakers = [s for _, s in file_subject]
         self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.speakers)))}
@@ -112,7 +117,9 @@ class LRWPathLoader(PathLoader):
             k: [os.path.join(self.folders[k], p + ext) for p in self.ids]
             for k in ("face", "audio", "video")
         }
-        self.paths["speaker-embeddings"] = os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
+        self.paths["speaker-embeddings"] = os.path.join(
+            self.folders["base"], "speaker-embeddings", filelist + ".npz"
+        )
 
 
 PATH_LOADERS = {
@@ -140,9 +147,8 @@ def get_video_lips(path_face, path_video, transform):
         ret, frame = capture.read()
         if not ret:
             break
-        frame = frame[top: bottom, left: right]
+        frame = frame[top:bottom, left:right]
         frames.append(transform(frame))
-
 
     frames = torch.cat(frames)
     capture.release()
@@ -177,7 +183,11 @@ class xTSDataset(torch.utils.data.Dataset):
         if idx >= self.size:
             raise IndexError
         try:
-            video = self.get_video(self.paths["face"][idx], self.paths["video"][idx], self.transforms["video"])
+            video = self.get_video(
+                self.paths["face"][idx],
+                self.paths["video"][idx],
+                self.transforms["video"],
+            )
             spect = self.get_spect(self.paths["audio"][idx])
             return video, spect
         except Exception as e:
@@ -202,7 +212,9 @@ class xTSDatasetSpeakerEmbedding(xTSDataset):
         super(xTSDatasetSpeakerEmbedding, self).__init__(*args, **kwargs)
         data_embedding = np.load(self.paths["speaker"])
         self.speaker_embeddings = data_embedding["feats"]
-        self.id_to_index = {id1: index for index, id1 in enumerate(data_embedding["id"])}
+        self.id_to_index = {
+            id1: index for index, id1 in enumerate(data_embedding["id"])
+        }
 
     def __getitem__(self, idx: int):
         video, spect = super().__getitem__(idx)

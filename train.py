@@ -189,8 +189,10 @@ def train(args, trial, is_train=True, study=None):
     evaluator.add_event_handler(engine.Events.COMPLETED, early_stopping_handler)
 
     if is_train:
+
         def global_step_transform(*args):
             return trainer.state.iteration // EVERY_K_ITERS
+
         checkpoint_handler = ignite.handlers.ModelCheckpoint(
             "output/models/checkpoints",
             model_name,
@@ -219,11 +221,7 @@ def main():
     args = parser.parse_args()
     args.batch_size = BATCH_SIZE
     args.max_epochs = MAX_EPOCHS
-    trial = SimpleNamespace(**{
-        "parameters": {
-            "lr": 5e-4,
-        },
-    })
+    trial = SimpleNamespace(**{"parameters": {"lr": 5e-4,},})
     print(args)
     print(trial)
     train(args, trial)
