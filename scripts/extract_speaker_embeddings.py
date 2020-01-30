@@ -18,7 +18,7 @@ import toolkits
 import utils as ut
 
 
-SEED = 1337
+AUDIO_EXT = ".wav"
 ROOT = os.environ.get("ROOT", "")
 PARAMS = {
     "dim": (257, None, 1),
@@ -33,18 +33,36 @@ PARAMS = {
     "model_path": "/home/doneata/src/vgg-speaker-recognition/model/weights.h5", 
 }
 
+SEED = 1337
 random.seed(SEED)
 
 
-def load_filelist(filelist):
-    with open(os.path.join(ROOT, "filelists", filelist + ".txt"), "r") as f:
-        return [line.split() for line in f.readlines()]
+class GridDataset:
+    def load_ids_and_paths(filelist):
+        with open(os.path.join(ROOT, "grid", "filelists", filelist + ".txt"), "r") as f:
+            files_and_folders = [line.split() for line in f.readlines()]
+        ids = files_and_folders
+        paths = [
+            os.path.join(ROOT, "audio-16khz", folder, file_ + AUDIO_EXT)
+            for file_, folder in files_and_folders
+        ]
+        return ids, paths
+
+
+class LRWDataset:
+    def load_ids_and_paths():
+        with open(os.path.join(ROOT, "lrw", "filelists", filelist + ".txt"), "r") as f:
+            paths = [line.split() for line in f.readlines()]
+        ids = paths
+        paths_audio = [os.path.join(ROOT, "lrw", "audio", p + ".wav") for p in paths]
+        return paths, paths_audio
 
 
 def get_arg_parser():
     parser = argparse.ArgumentParser()
 
     # fmt: off
+    parser.add_argument("--dataset", action="store_true", required=True, help="dataset to extract embeddings on")
     parser.add_argument("--to-evaluate", action="store_true", help="EER evaluation")
 
     # set up training configuration.
@@ -113,25 +131,25 @@ def evaluate(feats, labels, num_pairs=10_000):
     print("EER: {:.3f}%".format(eer))
 
 
-def main():
-    AUDIO_EXT = ".wav"
+DATASETS = {
+    'grid': GridDataset,
+    'lrw': LRWDataset,
+}
 
+
+def main():
     parser = get_arg_parser()
     args = parser.parse_args()
 
-    files_and_folders = load_filelist(args.filelist)
-    paths = [
-        os.path.join(ROOT, "audio-16khz", folder, file_ + AUDIO_EXT)
-        for file_, folder in files_and_folders
-    ]
-
+    dataset = DATASETS[args.dataset]()
+    ids, paths = dataset.load_ids_and_paths(args.filelist)
     feats = extract_features(paths, args)
 
-    path_emb = "{}/speaker-embeddings/{}.npz".format(args.ROOT, args.filelist)
-    np.savez(path_emb, files_and_folders=files_and_folders, feats=feats)
+    path_emb = os.path.join(args.ROOT, args.dataset, "speaker-embeddings", args.filelist + ".npz")
+    np.savez(path_emb, ids=ids, feats=feats)
 
-    if args.to_evaluate:
-        labels = [folder for _, folder in files_and_folders]
+    if args.to_evaluate and args.dataset == "grid":  # we don't have speaker information for LRW
+        labels = [folder for _, folder in ids]
         evaluate(feats, labels)
 
 
