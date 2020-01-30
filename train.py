@@ -22,12 +22,12 @@ import ignite.engine as engine
 import ignite.handlers
 
 import src.dataset
-from src.dataset import collate_fn, prepare_batch_2, prepare_batch_3
+from src.dataset import collate_fn, prepare_batch_2, prepare_batch_3, PATH_LOADERS
 
 from models import MODELS
 from models.nn import SpeakerInfo
 
-ROOT = os.environ.get("ROOT", "")
+ROOT = os.environ.get("ROOT", "data")
 
 SEED = 1337
 EVERY_K_ITERS = 512
@@ -38,7 +38,6 @@ LR_REDUCE_PARAMS = {
     "factor": 0.2,
     "patience": 2,
 }
-DATASET = "grid"
 
 
 IMAGE_TRANSFORM = transforms.Compose(
@@ -73,6 +72,14 @@ def get_argument_parser():
         help="which model type to train",
     )
     parser.add_argument(
+        "-d",
+        "--dataset",
+        type=str,
+        required=True,
+        choices=PATH_LOADERS,
+        help="which dataset to train on",
+    )
+    parser.add_argument(
         "--filelist", type=str, default="tiny2", help="name of the filelist to use",
     )
     parser.add_argument(
@@ -94,7 +101,7 @@ def train(args, trial, is_train=True, study=None):
         model_name = os.path.basename(args.model_path)
         model.load(model_path)
     else:
-        model_name = f"{DATASET}_{args.filelist}_{args.model_type}"
+        model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
         model_path = f"output/models/{model_name}.pth"
 
     # Select the dataset accoring to the type of speaker information encoded in the model.
@@ -110,10 +117,11 @@ def train(args, trial, is_train=True, study=None):
     else:
         assert False, "Unknown speaker info"
 
-    # fmt: off
-    train_dataset = Dataset(ROOT, args.filelist + "-train", transforms=TRAIN_TRANSFORMS)
-    valid_dataset = Dataset(ROOT, args.filelist + "-valid", transforms=VALID_TRANSFORMS)
-    # fmt: on
+    train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
+    valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
+
+    train_dataset = Dataset(train_path_loader, transforms=TRAIN_TRANSFORMS)
+    valid_dataset = Dataset(valid_path_loader, transforms=VALID_TRANSFORMS)
 
     kwargs = dict(batch_size=args.batch_size, collate_fn=collate_fn)
     train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)

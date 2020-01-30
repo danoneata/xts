@@ -40,22 +40,21 @@ random.seed(SEED)
 class GridDataset:
     def load_ids_and_paths(filelist):
         with open(os.path.join(ROOT, "grid", "filelists", filelist + ".txt"), "r") as f:
-            files_and_folders = [line.split() for line in f.readlines()]
-        ids = files_and_folders
-        paths = [
-            os.path.join(ROOT, "audio-16khz", folder, file_ + AUDIO_EXT)
-            for file_, folder in files_and_folders
-        ]
+            ids = list(f.readlines())
+        def get_path(id1):
+            file_, folder = id1.split()
+            return os.path.join(ROOT, "audio-16khz", folder, file_ + AUDIO_EXT)
+        paths = list(map(get_path, ids))
         return ids, paths
 
 
 class LRWDataset:
     def load_ids_and_paths():
         with open(os.path.join(ROOT, "lrw", "filelists", filelist + ".txt"), "r") as f:
-            paths = [line.split() for line in f.readlines()]
-        ids = paths
-        paths_audio = [os.path.join(ROOT, "lrw", "audio", p + ".wav") for p in paths]
-        return paths, paths_audio
+            ids = list(f.readlines())
+        get_path = lambda i: os.path.join(ROOT, "lrw", "audio", i + ".wav")
+        paths = list(map(get_path, ids))
+        return ids, paths
 
 
 def get_arg_parser():

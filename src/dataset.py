@@ -22,6 +22,8 @@ import torch.utils.data
 
 from torch.utils.data._utils.collate import default_collate
 
+from toolz import compose
+
 from hparams import hparams
 from audio import AUDIO_PROCESSING
 
@@ -66,75 +68,107 @@ def collate_fn(batches):
         return video, spect, extra
 
 
-class xTSSample(object):
-    def __init__(self, root: str, person: str, file: str):
-        self.root = root
-        self.person = person
-        self.data = None
-        self.file = file
-        self.crop = None
-        self.spec = None
-
-        self.paths = {
-            "face": os.path.join(root, "face-landmarks"),
-            "audio": os.path.join(root, "audio-from-video"),
-            "video": os.path.join(root, "video"),
+class PathLoader:
+    def __init__(self, root: str, dataset: str, filelist: str):
+        self.folders = {
+            "base": os.path.join(root, dataset),
+            "face": os.path.join(root, dataset, "face-landmarks"),
+            "audio": os.path.join(root, dataset, "audio-from-video"),
+            "video": os.path.join(root, dataset, "video"),
         }
-
-    def get_video_lips(self, path_face, path_video, transform):
-        """Crop lips"""
-        with open(path_face) as f:
-            face_landmarks = json.load(f)
-
-        delta = 15
-
-        top = face_landmarks[0][51][1] - delta
-        bottom = face_landmarks[0][58][1] + delta
-        left = face_landmarks[0][49][0] - delta
-        right = face_landmarks[0][55][0] + delta
-
-        capture = cv2.VideoCapture(path_video)
-        frames = []
-
-        while True:
-            ret, frame = capture.read()
-            if not ret:
-                break
-            frame = frame[top: bottom, left: right]
-            frames.append(transform(frame))
+        filelist = os.path.join(root, dataset, "filelists", filelist + ".txt")
+        with open(filelist, "r") as f:
+            self.ids = list(f.readlines())
 
 
-        frames = torch.cat(frames)
-        capture.release()
+class GridPathLoader(PathLoader):
+    def __init__(self, root:str, filelist: str):
+        super(GridPathLoader, self).__init__(root, "grid", filelist)
+        extensions = {
+            "face": ".json",
+            "audio": ".wav",
+            "video": ".mpg",
+        }
+        file_subject = [i.split() for i in self.ids]
+        self.paths = {
+            k: [os.path.join(self.folders[k], s, f + extensions[k]) for f, s in file_subject]
+            for k in ("face", "audio", "video")
+        }
+        self.paths["speaker-embeddings"] = os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
+        # Speaker information
+        self.speakers = [s for _, s in file_subject]
+        self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.speakers)))}
 
-        return frames
 
-    def load(self, transforms, audio_proc):
-        _get_path = lambda m, e: os.path.join(self.paths[m], self.person, self.file + e)
-        self.video = self.get_video_lips(_get_path("face", ".json"), _get_path("video", ".mpg"), transforms["video"])
-        self.spect = audio_proc.audio_to_mel(audio_proc.load_audio(_get_path("audio", ".wav")))
+class LRWPathLoader(PathLoader):
+    def __init__(self, root: str, dataset_name: str):
+        super(LRWPathLoader, self).__init__(root, "lrw", filelist)
+        extensions = {
+            "face": ".json",
+            "audio": ".wav",
+            "video": ".mpg",
+        }
+        self.paths = {
+            k: [os.path.join(self.folders[k], p + ext) for p in self.ids]
+            for k in ("face", "audio", "video")
+        }
+        self.paths["speaker-embeddings"] = os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
+
+
+PATH_LOADERS = {
+    "grid": GridPathLoader,
+    "lrw": LRWPathLoader,
+}
+
+
+def get_video_lips(path_face, path_video, transform):
+    """Loads video and crops frames around lips."""
+    with open(path_face) as f:
+        face_landmarks = json.load(f)
+
+    delta = 15
+
+    top = face_landmarks[0][51][1] - delta
+    bottom = face_landmarks[0][58][1] + delta
+    left = face_landmarks[0][49][0] - delta
+    right = face_landmarks[0][55][0] + delta
+
+    capture = cv2.VideoCapture(path_video)
+    frames = []
+
+    while True:
+        ret, frame = capture.read()
+        if not ret:
+            break
+        frame = frame[top: bottom, left: right]
+        frames.append(transform(frame))
+
+
+    frames = torch.cat(frames)
+    capture.release()
+
+    return frames
 
 
 class xTSDataset(torch.utils.data.Dataset):
     """Implementation of the pytorch Dataset."""
 
-    def __init__(self, root: str, type: str, transforms: Dict[str, Callable] = None):
+    def __init__(self, path_loader: PathLoader, transforms: Dict[str, Callable] = None):
         """ Initializes the xTSDataset
         Args:
             root (string): Path to the root data directory.
             type (string): name of the txt file containing the data split
         """
-        self.root = root
-        self.SAMPLING_RATE = 16_000
-
+        SAMPLING_RATE = 16_000
+        self.path_loader = path_loader
+        self.paths = path_loader.paths
         self.transforms = transforms
+        self.size = len(self.paths)
 
-        with open(os.path.join(self.root, "filelists", type + ".txt"), "r") as f:
-            file_folder = [line.split() for line in f.readlines()]
-
-        self.size = len(file_folder)
-        self.file, self.folder = zip(*file_folder)
-        self.audio_processing = AUDIO_PROCESSING[hparams.audio_processing](self.SAMPLING_RATE)
+        # Data loaders
+        audio_proc = AUDIO_PROCESSING[hparams.audio_processing](SAMPLING_RATE)
+        self.get_spect = compose(audio_proc.audio_to_mel, audio_proc.load_audio)
+        self.get_video = get_video_lips
 
     def __len__(self):
         return self.size
@@ -142,25 +176,23 @@ class xTSDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int):
         if idx >= self.size:
             raise IndexError
-
         try:
-            self.stream = xTSSample(self.root, self.folder[idx], self.file[idx])
-            self.stream.load(self.transforms, self.audio_processing)
-            return self.stream.video, self.stream.spect
+            video = self.get_video(self.paths["face"][idx], self.paths["video"][idx], self.transforms["video"])
+            spect = self.get_spect(self.paths["audio"][idx])
+            return video, spect
         except Exception as e:
             print(e)
-            print(self.folder[idx], self.file[idx])
+            print(self.path_loader.ids[idx])
             return None, None
 
 
 class xTSDatasetSpeakerId(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerId, self).__init__(*args, **kwargs)
-        self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.folder)))}
 
     def __getitem__(self, idx: int):
         video, spect = super().__getitem__(idx)
-        id_ = self.speaker_to_id[self.stream.person]
+        id_ = self.path_loader.speaker_to_id[self.path_loader.speakers[idx]]
         id_ = torch.tensor(id_).long()
         return video, spect, id_
 
@@ -168,13 +200,13 @@ class xTSDatasetSpeakerId(xTSDataset):
 class xTSDatasetSpeakerEmbedding(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerEmbedding, self).__init__(*args, **kwargs)
-        data_embedding = np.load(os.path.join(self.root, "speaker-embeddings/full.npz"))
+        data_embedding = np.load(self.paths["speaker"])
         self.speaker_embeddings = data_embedding["feats"]
-        self.file_to_index = {f: i for i, (f, _) in enumerate(data_embedding["files_and_folders"])}
+        self.id_to_index = {id1: index for index, id1 in enumerate(data_embedding["id"])}
 
     def __getitem__(self, idx: int):
         video, spect = super().__getitem__(idx)
-        i = self.file_to_index[self.file[idx]]
+        i = self.id_to_index[self.path_loader.ids[idx]]
         embedding = self.speaker_embeddings[i]
         embedding = torch.tensor(embedding).float()
         return video, spect, embedding
