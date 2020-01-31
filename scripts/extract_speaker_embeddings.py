@@ -11,6 +11,8 @@ from itertools import product
 import numpy as np
 import tensorflow as tf
 
+from tqdm import tqdm
+
 sys.path.insert(0, "/home/doneata/src/vgg-speaker-recognition/tool")
 sys.path.insert(0, "/home/doneata/src/vgg-speaker-recognition/src")
 import model
@@ -19,7 +21,7 @@ import utils as ut
 
 
 AUDIO_EXT = ".wav"
-ROOT = os.environ.get("ROOT", "")
+ROOT = os.environ.get("ROOT", "data")
 PARAMS = {
     "dim": (257, None, 1),
     "nfft": 512,
@@ -38,21 +40,21 @@ random.seed(SEED)
 
 
 class GridDataset:
-    def load_ids_and_paths(filelist):
+    def load_ids_and_paths(self, filelist):
         with open(os.path.join(ROOT, "grid", "filelists", filelist + ".txt"), "r") as f:
-            ids = list(f.readlines())
+            ids = [line.strip() for line in f.readlines()]
         def get_path(id1):
             file_, folder = id1.split()
-            return os.path.join(ROOT, "audio-16khz", folder, file_ + AUDIO_EXT)
+            return os.path.join(ROOT, "grid", "audio-16khz", folder, file_ + AUDIO_EXT)
         paths = list(map(get_path, ids))
         return ids, paths
 
 
 class LRWDataset:
-    def load_ids_and_paths():
+    def load_ids_and_paths(self, filelist):
         with open(os.path.join(ROOT, "lrw", "filelists", filelist + ".txt"), "r") as f:
-            ids = list(f.readlines())
-        get_path = lambda i: os.path.join(ROOT, "lrw", "audio", i + ".wav")
+            ids = [line.strip() for line in f.readlines()]
+        get_path = lambda i: os.path.join(ROOT, "lrw", "audio-from-video", i + ".wav")
         paths = list(map(get_path, ids))
         return ids, paths
 
@@ -61,7 +63,7 @@ def get_arg_parser():
     parser = argparse.ArgumentParser()
 
     # fmt: off
-    parser.add_argument("--dataset", action="store_true", required=True, help="dataset to extract embeddings on")
+    parser.add_argument("--dataset", choices=DATASETS, required=True, help="dataset to extract embeddings on")
     parser.add_argument("--to-evaluate", action="store_true", help="EER evaluation")
 
     # set up training configuration.
@@ -95,10 +97,7 @@ def extract_features(paths, args):
     num_paths = len(paths)
     feats = np.zeros((num_paths, PARAMS["feat_dim"]))
 
-    for i, path in enumerate(paths):
-        if i % 50 == 0:
-            print("extracting features {:7d} / {:7d}".format(i, num_paths))
-
+    for i, path in enumerate(tqdm(paths)):
         specs = ut.load_data(
             path,
             win_length=PARAMS["win_length"],
@@ -144,7 +143,7 @@ def main():
     ids, paths = dataset.load_ids_and_paths(args.filelist)
     feats = extract_features(paths, args)
 
-    path_emb = os.path.join(args.ROOT, args.dataset, "speaker-embeddings", args.filelist + ".npz")
+    path_emb = os.path.join(ROOT, args.dataset, "speaker-embeddings", args.filelist + ".npz")
     np.savez(path_emb, ids=ids, feats=feats)
 
     if args.to_evaluate and args.dataset == "grid":  # we don't have speaker information for LRW

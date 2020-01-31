@@ -48,10 +48,10 @@ def collate_fn(batches):
     spects = [batch[1] for batch in batches if batch[1] is not None]
 
     max_v = max(video.shape[0] for video in videos)
-    pad_v = lambda video: (0, 0, 0, 0, 0, max_v - video.shape[0])
+    pad_v = lambda video: [0, 0, 0, 0, 0, max_v - video.shape[0]]
 
     max_s = max(spect.shape[0] for spect in spects)
-    pad_s = lambda spect: (0, 0, 0, max_s - spect.shape[0])
+    pad_s = lambda spect: [0, 0, 0, max_s - spect.shape[0]]
 
     videos = [F.pad(video, pad=pad_v(video)) for video in videos]
     spects = [F.pad(spect, pad=pad_s(spect)) for spect in spects]
@@ -68,6 +68,18 @@ def collate_fn(batches):
         return video, spect, extra
 
 
+DATASET_PARAMETERS = {
+    "lrw": {
+        "len-inp": 29,
+        "len-out": 98,
+    },
+    "grid": {
+        "len-inp": 75,
+        "len-out": 239,
+    },
+}
+
+
 class PathLoader:
     def __init__(self, root: str, dataset: str, filelist: str):
         self.folders = {
@@ -78,7 +90,7 @@ class PathLoader:
         }
         filelist = os.path.join(root, dataset, "filelists", filelist + ".txt")
         with open(filelist, "r") as f:
-            self.ids = list(f.readlines())
+            self.ids = [line.strip() for line in f.readlines()]
 
 
 class GridPathLoader(PathLoader):
@@ -97,29 +109,29 @@ class GridPathLoader(PathLoader):
             ]
             for k in ("face", "audio", "video")
         }
-        self.paths["speaker-embeddings"] = os.path.join(
-            self.folders["base"], "speaker-embeddings", filelist + ".npz"
-        )
+        self.paths["speaker-embeddings"] = [
+            os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
+        ]
         # Speaker information
         self.speakers = [s for _, s in file_subject]
         self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.speakers)))}
 
 
 class LRWPathLoader(PathLoader):
-    def __init__(self, root: str, dataset_name: str):
+    def __init__(self, root: str, filelist: str):
         super(LRWPathLoader, self).__init__(root, "lrw", filelist)
         extensions = {
             "face": ".json",
             "audio": ".wav",
-            "video": ".mpg",
+            "video": ".mp4",
         }
         self.paths = {
-            k: [os.path.join(self.folders[k], p + ext) for p in self.ids]
+            k: [os.path.join(self.folders[k], p + extensions[k]) for p in self.ids]
             for k in ("face", "audio", "video")
         }
-        self.paths["speaker-embeddings"] = os.path.join(
-            self.folders["base"], "speaker-embeddings", filelist + ".npz"
-        )
+        self.paths["speaker-embeddings"] = [
+            os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
+        ]
 
 
 PATH_LOADERS = {
@@ -159,7 +171,7 @@ def get_video_lips(path_face, path_video, transform):
 class xTSDataset(torch.utils.data.Dataset):
     """Implementation of the pytorch Dataset."""
 
-    def __init__(self, path_loader: PathLoader, transforms: Dict[str, Callable] = None):
+    def __init__(self, path_loader: PathLoader, transforms: Dict[str, Callable]):
         """ Initializes the xTSDataset
         Args:
             root (string): Path to the root data directory.
@@ -169,7 +181,7 @@ class xTSDataset(torch.utils.data.Dataset):
         self.path_loader = path_loader
         self.paths = path_loader.paths
         self.transforms = transforms
-        self.size = len(self.paths)
+        self.size = len(self.path_loader.ids)
 
         # Data loaders
         audio_proc = AUDIO_PROCESSING[hparams.audio_processing](SAMPLING_RATE)
@@ -201,7 +213,7 @@ class xTSDatasetSpeakerId(xTSDataset):
         super(xTSDatasetSpeakerId, self).__init__(*args, **kwargs)
 
     def __getitem__(self, idx: int):
-        video, spect = super().__getitem__(idx)
+        video, spect = super(xTSDatasetSpeakerId, self).__getitem__(idx)
         id_ = self.path_loader.speaker_to_id[self.path_loader.speakers[idx]]
         id_ = torch.tensor(id_).long()
         return video, spect, id_
@@ -210,14 +222,14 @@ class xTSDatasetSpeakerId(xTSDataset):
 class xTSDatasetSpeakerEmbedding(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerEmbedding, self).__init__(*args, **kwargs)
-        data_embedding = np.load(self.paths["speaker"])
+        data_embedding = np.load(self.paths["speaker-embeddings"][0])
         self.speaker_embeddings = data_embedding["feats"]
         self.id_to_index = {
-            id1: index for index, id1 in enumerate(data_embedding["id"])
+            id1: index for index, id1 in enumerate(data_embedding["ids"])
         }
 
     def __getitem__(self, idx: int):
-        video, spect = super().__getitem__(idx)
+        video, spect = super(xTSDatasetSpeakerEmbedding, self).__getitem__(idx)
         i = self.id_to_index[self.path_loader.ids[idx]]
         embedding = self.speaker_embeddings[i]
         embedding = torch.tensor(embedding).float()

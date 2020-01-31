@@ -15,10 +15,10 @@ from tacotron2.model import Prenet, Postnet
 
 
 class Tacotron2(nn.Module):
-    def __init__(self, hparams):
+    def __init__(self, hparams, dataset_params):
         super(Tacotron2, self).__init__()
-        self.len_inp = 75
-        self.len_out = 239
+        self.len_inp = dataset_params["len-inp"]
+        self.len_out = dataset_params["len-out"]
         self.out_inp_factor = int(np.ceil(self.len_out / self.len_inp))
 
         self.n_mel_channels = hparams.n_mel_channels

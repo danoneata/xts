@@ -22,7 +22,13 @@ import ignite.engine as engine
 import ignite.handlers
 
 import src.dataset
-from src.dataset import collate_fn, prepare_batch_2, prepare_batch_3, PATH_LOADERS
+from src.dataset import (
+    collate_fn,
+    prepare_batch_2,
+    prepare_batch_3,
+    DATASET_PARAMETERS,
+    PATH_LOADERS,
+)
 
 from models import MODELS
 from models.nn import SpeakerInfo
@@ -95,14 +101,16 @@ def get_argument_parser():
 
 def train(args, trial, is_train=True, study=None):
 
-    model = MODELS[args.model_type](trial.parameters)
+    dataset_parameters = DATASET_PARAMETERS[args.dataset]
+
+    model = MODELS[args.model_type](dataset_parameters, trial.parameters)
+
+    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
+    model_path = f"output/models/{model_name}.pth"
+
+    # Initialize model from existing one.
     if args.model_path is not None:
-        model_path = args.model_path
-        model_name = os.path.basename(args.model_path)
-        model.load(model_path)
-    else:
-        model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
-        model_path = f"output/models/{model_name}.pth"
+        model.load_state_dict(torch.load(args.model_path))
 
     # Select the dataset accoring to the type of speaker information encoded in the model.
     if model.speaker_info is SpeakerInfo.NOTHING:

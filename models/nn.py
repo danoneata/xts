@@ -90,7 +90,7 @@ class VideoEncoder(nn.Module):
 
 class Bjorn(nn.Module):
     """xTS model that uses pre-computed speaker embeddings"""
-    def __init__(self, params):
+    def __init__(self, dataset_params, params):
         super(Bjorn, self).__init__()
         E_DIM_IN = 512
         E_DIM_OUT = params["speaker_embedding_dim"]
@@ -98,7 +98,7 @@ class Bjorn(nn.Module):
         hparams_copy.encoder_embedding_dim += E_DIM_OUT
         self.video_encoder = VideoEncoder(params)
         self.linear = nn.Linear(E_DIM_IN, E_DIM_OUT)
-        self.decoder = Tacotron2(hparams_copy)
+        self.decoder = Tacotron2(hparams_copy, dataset_params)
         self.speaker_info = SpeakerInfo.EMBEDDING
 
     def _concat_embedding(self, x, e):
@@ -117,7 +117,7 @@ class Bjorn(nn.Module):
 
     def predict(self, inp):
         x, emb = inp
-        x = self.encode(x)
+        x = self.video_encoder(x)
         x = self._concat_embedding(x, emb)
         _, y = self.decoder.predict(x)
         return y
@@ -125,7 +125,7 @@ class Bjorn(nn.Module):
 
 class Sven(nn.Module):
     """xTS model that can use speaker id's to learn speaker embeddings"""
-    def __init__(self, params):
+    def __init__(self, dataset_params, params):
         super(Sven, self).__init__()
         self.params = SimpleNamespace(**params)
         self.speaker_info = SpeakerInfo.ID
@@ -168,7 +168,7 @@ class Sven(nn.Module):
             hparams.encoder_embedding_dim = hparams.encoder_embedding_dim + speaker_embedding_dim
         else:
             self.speaker_embedding= None
-        self.decoder = Tacotron2(hparams)
+        self.decoder = Tacotron2(hparams, dataset_params)
 
     def encode(self, x, ids):
         B, S, H, W = x.shape
