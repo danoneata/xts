@@ -2,27 +2,30 @@ from abc import ABCMeta, abstractmethod
 import pdb
 import sys
 
-import librosa
-import numpy as np
+import librosa  # type: ignore
+import numpy as np  # type: ignore
 import torch
 
-from scipy.signal import lfilter
+from scipy.signal import lfilter  # type: ignore
 
 from hparams import hparams
 
 sys.path.insert(0, "tacotron2")
-from tacotron2.audio_processing import griffin_lim
-from tacotron2.layers import TacotronSTFT
+from tacotron2.audio_processing import griffin_lim  # type: ignore
+from tacotron2.layers import TacotronSTFT  # type: ignore
 
 
 class AudioProcessing(metaclass=ABCMeta):
+    def __init__(self, sampling_rate):
+        self.sampling_rate = sampling_rate
+
     @abstractmethod
-    def audio_to_mel(self, audio: np.ndarray) -> torch.tensor:
+    def audio_to_mel(self, audio: np.ndarray) -> torch.Tensor:
         """Returns an NumPy array of size seq_len × n_mel_channels"""
         pass
 
     @abstractmethod
-    def mel_to_audio(self, mel: torch.tensor) -> np.ndarray:
+    def mel_to_audio(self, mel: torch.Tensor) -> np.ndarray:
         pass
 
     def load_audio(self, path: str) -> np.ndarray:
@@ -43,9 +46,8 @@ class Tacotron(AudioProcessing):
         mel_fmin=0.0,
         mel_fmax=8000.0,
     ):
-
+        super(Tacotron, self).__init__(sampling_rate)
         N_MEL_CHANNELS = hparams.n_mel_channels
-        self.sampling_rate = sampling_rate
         self.taco_stft = TacotronSTFT(
             filter_length=filter_length,
             hop_length=hop_length,
@@ -59,7 +61,6 @@ class Tacotron(AudioProcessing):
     def audio_to_mel(self, audio):
         audio = torch.tensor(audio)
         audio = audio.unsqueeze(0)
-        audio = torch.autograd.Variable(audio, requires_grad=False)
         melspec = self.taco_stft.mel_spectrogram(audio)
         melspec = torch.squeeze(melspec, 0)
         return melspec.T
@@ -78,7 +79,7 @@ class Tacotron(AudioProcessing):
 
         GRIFFIN_ITERS = 60
         audio = griffin_lim(
-            torch.autograd.Variable(spec_from_mel[:, :, :-1]),
+            spec_from_mel[:, :, :-1],
             self.taco_stft.stft_fn,
             GRIFFIN_ITERS,
         )
@@ -94,7 +95,7 @@ class DeepConvTTS(AudioProcessing):
     
     """
     def __init__(self, sampling_rate, hop_length=None, win_length=None):
-        self.sampling_rate = sampling_rate
+        super(DeepConvTTS, self).__init__(sampling_rate)
         self.hop_length = hop_length or int(sampling_rate * 0.0125)
         self.win_length = win_length or int(sampling_rate * 0.05)
         self.n_fft = 1024
