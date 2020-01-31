@@ -38,11 +38,11 @@ ROOT = os.environ.get("ROOT", "data")
 SEED = 1337
 EVERY_K_ITERS = 512
 MAX_EPOCHS = 128
-PATIENCE = 4
+PATIENCE = 8
 BATCH_SIZE = 8
 LR_REDUCE_PARAMS = {
     "factor": 0.2,
-    "patience": 2,
+    "patience": 4,
 }
 
 
