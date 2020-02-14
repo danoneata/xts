@@ -19,12 +19,12 @@ The code is organized as follows:
 
 1. video to mel-spectrogram
 ```bash
-python predict.py -m --model-path -d -f -s -o output/preds/...
+python predict.py -m magnus --model-path output/models/grid_multi-speaker_magnus.pth -d grid --filelist multi-speaker -v -o output/predictions/grid-multi-test-magnus.npz
 ```
 
 2. mel-spectrogram to WAV:
 ```bash
 # ~/work/dc-tts-xts
 # source venv/bin/activate
-python synthesize_spectro.py ~/work/xts/output/preds/magnus-multi.npy
+python synthesize_spectro.py ~/work/xts/output/predictions/grid-multi-test-magnus.npz
 ```

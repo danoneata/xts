@@ -96,16 +96,15 @@ class PathLoader:
 class GridPathLoader(PathLoader):
     def __init__(self, root: str, filelist: str):
         super(GridPathLoader, self).__init__(root, "grid", filelist)
-        extensions = {
+        self.extensions = {
             "face": ".json",
             "audio": ".wav",
             "video": ".mpg",
         }
-        file_subject = [i.split() for i in self.ids]
         self.paths = {
             k: [
-                os.path.join(self.folders[k], s, f + extensions[k])
-                for f, s in file_subject
+                os.path.join(self.folders[k], self.id_to_filename(i, k))
+                for i in self.ids
             ]
             for k in ("face", "audio", "video")
         }
@@ -113,25 +112,32 @@ class GridPathLoader(PathLoader):
             os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
         ]
         # Speaker information
-        self.speakers = [s for _, s in file_subject]
+        self.speakers = [i.split()[1] for i in self.ids]
         self.speaker_to_id = {s: i for i, s in enumerate(sorted(set(self.speakers)))}
+
+    def id_to_filename(self, id1, type1):
+        file1, subject = id1.split()
+        return os.path.join(subject, file1 + self.extensions[type1])
 
 
 class LRWPathLoader(PathLoader):
     def __init__(self, root: str, filelist: str):
         super(LRWPathLoader, self).__init__(root, "lrw", filelist)
-        extensions = {
+        self.extensions = {
             "face": ".json",
             "audio": ".wav",
             "video": ".mp4",
         }
         self.paths = {
-            k: [os.path.join(self.folders[k], p + extensions[k]) for p in self.ids]
+            k: [os.path.join(self.folders[k], self.id_to_filename(p, k)) for p in self.ids]
             for k in ("face", "audio", "video")
         }
         self.paths["speaker-embeddings"] = [
             os.path.join(self.folders["base"], "speaker-embeddings", filelist + ".npz")
         ]
+
+    def id_to_filename(self, id1, type1):
+        return os.path.join(id1 + self.extensions[type1])
 
 
 PATH_LOADERS = {

@@ -5,6 +5,8 @@ import sys
 import numpy as np
 import torch
 
+from tqdm import tqdm
+
 from train import (
     DATASET_PARAMETERS,
     MODELS,
@@ -20,7 +22,7 @@ from train import (
 import src.dataset
 
 
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 DEVICE = "cuda"
 NON_BLOCKING = False
 
@@ -53,21 +55,39 @@ def predict(args):
         assert False, "Unknown speaker info"
 
     # Prepare data loader
-    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-test")
+    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
     dataset = Dataset(path_loader, transforms=VALID_TRANSFORMS)
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
 
+    n_samples = len(dataset)
+    t = DATASET_PARAMETERS[args.dataset]["len-out"]
+    n_mel_channels = 80
+    preds = np.zeros((n_samples, t, n_mel_channels))
+
     with torch.no_grad():
-        for batch in loader:
+        for b, batch in enumerate(tqdm(loader)):
             (x, _, extra), _ = prepare_batch(batch, DEVICE, NON_BLOCKING)
-            batch_x = x, extra
-            p = model.predict(batch_x)
+            p = model.predict((x, extra))
+            preds[b * BATCH_SIZE: (b + 1) * BATCH_SIZE] = p.cpu().numpy()
+
+    ids = path_loader.ids
+    filenames = [path_loader.id_to_filename(i, "audio") for i in ids]
+    np.savez(args.output_path, ids=ids, filenames=filenames, preds=preds)
 
 
 def main():
     parser = get_argument_parser()
+    parser.add_argument(
+        "-s",
+        "--split",
+        type=str,
+        default="test",
+        choices={"train", "valid", "test"},
+        required=False,
+        help="which data to use",
+    )
     parser.add_argument(
         "-o",
         "--output-path",
