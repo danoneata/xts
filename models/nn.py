@@ -170,7 +170,7 @@ class Sven(nn.Module):
             self.speaker_embedding= None
         self.decoder = Tacotron2(hparams, dataset_params)
 
-    def encode(self, x, ids):
+    def _encode_video(self, x):
         B, S, H, W = x.shape
         # B, 1, S, H, W
         x = x.unsqueeze(1)
@@ -190,13 +190,22 @@ class Sven(nn.Module):
         x, _ = self.encoder_rnn(x)
         # B, S, D
         x = x.permute(1, 0, 2)
+        return x
+
+    def _concat_embedding(self, x, e):
+        _, S, _ = x.shape
+        # B, S, E
+        e = e.unsqueeze(1).repeat(1, S, 1)
+        # B, S, E + D
+        x = torch.cat((x, e), dim=2)
+        return x
+
+    def encode(self, x, ids):
+        x = self._encode_video(x)
         if self.speaker_embedding:
             # B, E
             e = self.speaker_embedding(ids)
-            # B, S, E
-            e = e.unsqueeze(1).repeat(1, S, 1)
-            # B, S, E + D
-            x = torch.cat((x, e), dim=2)
+            x = self._concat_embedding(x, e)
         return x
 
     def forward(self, inp):
