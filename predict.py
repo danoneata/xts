@@ -27,6 +27,15 @@ DEVICE = "cuda"
 NON_BLOCKING = False
 
 
+def predict_emb(model, inp, emb):
+    """Predicts with a fixed embedding."""
+    x, _ = inp
+    x = model._encode_video(x)
+    x = model._concat_embedding(x, emb)
+    _, y = model.decoder.predict(x)
+    return y
+
+
 def predict(args):
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
     model = MODELS[args.model_type](dataset_parameters)
@@ -66,10 +75,21 @@ def predict(args):
     n_mel_channels = 80
     preds = np.zeros((n_samples, t, n_mel_channels))
 
+    if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
+        emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
+        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    if model.speaker_info is SpeakerInfo.ID and args.embedding.startswith("spk"):
+        _, speaker = args.embedding.split("-")
+        id1 = path_loader.speaker_to_id[speaker]
+        emb = model.speaker_embedding.weight[id1]
+        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    else:
+        predict1 = lambda model, inp: model.predict(inp)
+
     with torch.no_grad():
         for b, batch in enumerate(tqdm(loader)):
             (x, _, extra), _ = prepare_batch(batch, DEVICE, NON_BLOCKING)
-            p = model.predict((x, extra))
+            p = predict1(model, (x, extra))
             preds[b * BATCH_SIZE: (b + 1) * BATCH_SIZE] = p.cpu().numpy()
 
     ids = path_loader.ids
@@ -95,6 +115,13 @@ def main():
         required=True,
         help="where to store the predictions",
     )
+    parser.add_argument(
+        "-e",
+        "--embedding",
+        # choices={"mean", None},
+        help="what embedding to use",
+    )
+
     args = parser.parse_args()
     predict(args)
 
