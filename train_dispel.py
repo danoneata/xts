@@ -1,0 +1,248 @@
+import argparse
+import os
+import os.path
+import pdb
+import sys
+import time
+
+import numpy as np
+
+from types import SimpleNamespace
+
+import torch
+import torch.nn as nn
+import torch.optim.lr_scheduler as lr_scheduler
+import torch.utils.data
+
+from torch.nn import functional as F
+
+import ignite.engine as engine
+import ignite.handlers
+
+from hparams import hparams
+
+from train import (
+    DATASET_PARAMETERS,
+    EVERY_K_ITERS,
+    IMAGE_TRANSFORM,
+    LR_REDUCE_PARAMS,
+    MAX_EPOCHS,
+    MODELS,
+    PATH_LOADERS,
+    PATIENCE,
+    ROOT,
+    SEED,
+    SpeakerInfo,
+    TRAIN_TRANSFORMS,
+    VALID_TRANSFORMS,
+    collate_fn,
+    get_argument_parser,
+    prepare_batch_2,
+    prepare_batch_3,
+)
+
+import src.dataset
+
+
+
+BATCH_SIZE = 4
+
+
+class TemporalClassifier(nn.Module):
+    def __init__(self, input_dim, n_classes):
+        super(TemporalClassifier, self).__init__()
+        hidden_dim = 64
+        self.nn_pre = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+        self.nn_post = nn.Sequential(
+            nn.Linear(hidden_dim, n_classes),
+            nn.LogSoftmax(dim=-1),
+        )
+
+    def forward(self, x):
+        B, T, D = x.shape
+        p = self.nn_pre(x.reshape(-1, D))
+        p = p.view(B, T, -1)
+        p = p.mean(dim=1)
+        p = self.nn_post(p)
+        return p
+
+
+def train(args, trial, is_train=True, study=None):
+
+    Dataset = src.dataset.xTSDatasetSpeakerId
+    prepare_batch = prepare_batch_3
+
+    train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
+    valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
+
+    train_dataset = Dataset(train_path_loader, transforms=TRAIN_TRANSFORMS)
+    valid_dataset = Dataset(valid_path_loader, transforms=VALID_TRANSFORMS)
+
+    kwargs = dict(batch_size=args.batch_size, collate_fn=collate_fn)
+    train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)
+    valid_loader = torch.utils.data.DataLoader(valid_dataset, shuffle=False, **kwargs)
+
+    num_speakers = len(train_path_loader.speaker_to_id)
+    dataset_parameters = DATASET_PARAMETERS[args.dataset]
+    dataset_parameters["num_speakers"] = num_speakers
+
+    model_speaker = TemporalClassifier(hparams.encoder_embedding_dim, num_speakers)
+    model = MODELS[args.model_type](dataset_parameters, trial.parameters)
+
+    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
+    model_path = f"output/models/{model_name}.pth"
+
+    # Initialize model from existing one.
+    if args.model_path is not None:
+        model.load_state_dict(torch.load(args.model_path))
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=trial.parameters["lr"])  # 0.001
+    optimizer_speaker = torch.optim.Adam(model_speaker.parameters(), lr=0.004)
+
+    mse_loss = nn.MSELoss()
+
+    def loss_reconstruction(pred, true):
+        pred1, pred2 = pred
+        return mse_loss(pred1, true) + mse_loss(pred2, true)
+
+    device = "cuda"
+    λ = 0.0002
+
+    model.to(device)
+    model_speaker.to(device)
+
+    def step(engine, batch):
+        model.train()
+        model_speaker.train()
+
+        x, y = prepare_batch(batch, device=device, non_blocking=True)
+        _, _, i = x
+
+        # Generator: generates audio and dispels speaker identity
+        y_pred, z = model.forward_emb(x)
+        i_pred = model_speaker.forward(z)
+
+        entropy_s = (- i_pred.exp() * i_pred).sum(dim=1).mean()  # entropy on speakers
+        loss_r = loss_reconstruction(y_pred, y)  # reconstruction
+        loss_g = loss_r - λ * entropy_s  # generator
+
+        optimizer.zero_grad()
+        loss_g.backward(retain_graph=True)
+        optimizer.step()
+
+        # Discriminator: predicts speaker identity
+        optimizer_speaker.zero_grad()
+        loss_s = F.nll_loss(i_pred, i)  # speaker
+        loss_s.backward()
+        optimizer_speaker.step()
+
+        return {
+            'loss-generator': loss_g.item(),
+            'loss-reconstruction': loss_r.item(),
+            'loss-speaker': loss_s.item(),
+            'entropy-speaker': entropy_s,
+        }
+
+    trainer = engine.Engine(step)
+
+    # trainer = engine.create_supervised_trainer(
+    #     model, optimizer, loss, device=device, prepare_batch=prepare_batch
+    # )
+
+    evaluator = engine.create_supervised_evaluator(
+        model,
+        metrics={"loss": ignite.metrics.Loss(loss_reconstruction)},
+        device=device,
+        prepare_batch=prepare_batch,
+    )
+
+    @trainer.on(engine.Events.ITERATION_COMPLETED)
+    def log_training_loss(trainer):
+        print(
+            "Epoch {:3d} | Loss gen.: {:+8.6f} = {:8.6f} - λ * {:8.6f} | Loss disc.: {:8.6f}".format(
+                trainer.state.epoch,
+                trainer.state.output["loss-generator"],
+                trainer.state.output["loss-reconstruction"],
+                trainer.state.output["entropy-speaker"],
+                trainer.state.output["loss-speaker"],
+            )
+        )
+
+    @trainer.on(engine.Events.ITERATION_COMPLETED(every=EVERY_K_ITERS))
+    def log_validation_loss(trainer):
+        evaluator.run(valid_loader)
+        metrics = evaluator.state.metrics
+        print(
+            "Epoch {:3d} Valid loss: {:8.6f} ←".format(
+                trainer.state.epoch, metrics["loss"]
+            )
+        )
+
+    lr_reduce = lr_scheduler.ReduceLROnPlateau(
+        optimizer, verbose=args.verbose, **LR_REDUCE_PARAMS
+    )
+
+    @evaluator.on(engine.Events.COMPLETED)
+    def update_lr_reduce(engine):
+        loss = engine.state.metrics["loss"]
+        lr_reduce.step(loss)
+
+    @evaluator.on(engine.Events.COMPLETED)
+    def terminate_study(engine):
+        """Stops underperforming trials."""
+        if study and study.should_trial_stop(trial=trial):
+            trainer.terminate()
+
+    def score_function(engine):
+        return -engine.state.metrics["loss"]
+
+    early_stopping_handler = ignite.handlers.EarlyStopping(
+        patience=PATIENCE, score_function=score_function, trainer=trainer
+    )
+    evaluator.add_event_handler(engine.Events.COMPLETED, early_stopping_handler)
+
+    if is_train:
+
+        def global_step_transform(*args):
+            return trainer.state.iteration // EVERY_K_ITERS
+
+        checkpoint_handler = ignite.handlers.ModelCheckpoint(
+            "output/models/checkpoints",
+            model_name,
+            score_name="objective",
+            score_function=score_function,
+            n_saved=5,
+            require_empty=False,
+            create_dir=True,
+            global_step_transform=global_step_transform,
+        )
+        evaluator.add_event_handler(
+            engine.Events.COMPLETED, checkpoint_handler, {"model": model}
+        )
+
+    trainer.run(train_loader, max_epochs=args.max_epochs)
+
+    if is_train:
+        torch.save(model.state_dict(), model_path)
+        print("Model saved at:", model_path)
+
+    return evaluator.state.metrics["loss"]
+
+
+def main():
+    parser = get_argument_parser()
+    args = parser.parse_args()
+    args.batch_size = BATCH_SIZE
+    args.max_epochs = MAX_EPOCHS
+    trial = SimpleNamespace(**{"parameters": {"lr": 5e-4,},})
+    print(args)
+    print(trial)
+    train(args, trial)
+
+
+if __name__ == "__main__":
+    main()

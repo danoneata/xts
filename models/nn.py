@@ -90,6 +90,8 @@ class VideoEncoder(nn.Module):
 
 class Bjorn(nn.Module):
     """xTS model that uses pre-computed speaker embeddings"""
+    speaker_info = SpeakerInfo.EMBEDDING
+
     def __init__(self, dataset_params, params):
         super(Bjorn, self).__init__()
         E_DIM_IN = 512
@@ -99,7 +101,6 @@ class Bjorn(nn.Module):
         self.video_encoder = VideoEncoder(params)
         self.linear = nn.Linear(E_DIM_IN, E_DIM_OUT)
         self.decoder = Tacotron2(hparams_copy, dataset_params)
-        self.speaker_info = SpeakerInfo.EMBEDDING
 
     def _concat_embedding(self, x, e):
         _, S, _ = x.shape
@@ -125,10 +126,11 @@ class Bjorn(nn.Module):
 
 class Sven(nn.Module):
     """xTS model that can use speaker id's to learn speaker embeddings"""
+    speaker_info = SpeakerInfo.ID
+
     def __init__(self, dataset_params, params):
         super(Sven, self).__init__()
         self.params = SimpleNamespace(**params)
-        self.speaker_info = SpeakerInfo.ID
         # use 3d convolution to extract features in time
         self.conv0_3d = nn.Sequential(
             nn.Conv3d(
@@ -162,7 +164,7 @@ class Sven(nn.Module):
         )
         self.encoder_embedding_dim = hparams.encoder_embedding_dim
         if "speaker_embedding_dim" in params and params["speaker_embedding_dim"] > 0:
-            num_embeddings = 14
+            num_embeddings = dataset_params["num_speakers"] # 14  # TODO parameterize
             speaker_embedding_dim = params["speaker_embedding_dim"]
             self.speaker_embedding = nn.Embedding(num_embeddings, speaker_embedding_dim)
             hparams.encoder_embedding_dim = hparams.encoder_embedding_dim + speaker_embedding_dim
@@ -213,6 +215,17 @@ class Sven(nn.Module):
         x, y, ids = inp
         x = self.encode(x, ids)
         return self.decoder(x, y)
+
+    def forward_emb(self, inp):
+        # Returns visual embedding
+        x, y, ids = inp
+        z = self._encode_video(x)
+        if self.speaker_embedding:
+            e = self.speaker_embedding(ids)
+            s = self._concat_embedding(z, e)
+        else:
+            s = z
+        return self.decoder(s, y), z
 
     def predict(self, inp):
         # Step-by-step decoding
