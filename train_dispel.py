@@ -26,7 +26,6 @@ from train import (
     EVERY_K_ITERS,
     IMAGE_TRANSFORM,
     LR_REDUCE_PARAMS,
-    MAX_EPOCHS,
     MODELS,
     PATH_LOADERS,
     PATIENCE,
@@ -44,8 +43,8 @@ from train import (
 import src.dataset
 
 
-
-BATCH_SIZE = 4
+MAX_EPOCHS = 256
+BATCH_SIZE = 6
 
 
 class TemporalClassifier(nn.Module):
@@ -93,7 +92,7 @@ def train(args, trial, is_train=True, study=None):
     model_speaker = TemporalClassifier(hparams.encoder_embedding_dim, num_speakers)
     model = MODELS[args.model_type](dataset_parameters, trial.parameters)
 
-    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
+    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}_dispel"
     model_path = f"output/models/{model_name}.pth"
 
     # Initialize model from existing one.
@@ -136,7 +135,7 @@ def train(args, trial, is_train=True, study=None):
 
         # Discriminator: predicts speaker identity
         optimizer_speaker.zero_grad()
-        loss_s = F.nll_loss(i_pred, i)  # speaker
+        loss_s = F.nll_loss(i_pred, i)
         loss_s.backward()
         optimizer_speaker.step()
 
