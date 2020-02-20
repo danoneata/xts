@@ -78,7 +78,11 @@ def predict(args):
     if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
         emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
         predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
-    if model.speaker_info is SpeakerInfo.ID and args.embedding.startswith("spk"):
+    if (
+        model.speaker_info is SpeakerInfo.ID
+        and args.embedding
+        and args.embedding.startswith("spk")
+    ):
         _, speaker = args.embedding.split("-")
         id1 = path_loader.speaker_to_id[speaker]
         emb = model.speaker_embedding.weight[id1]
@@ -90,7 +94,7 @@ def predict(args):
         for b, batch in enumerate(tqdm(loader)):
             (x, _, extra), _ = prepare_batch(batch, DEVICE, NON_BLOCKING)
             p = predict1(model, (x, extra))
-            preds[b * BATCH_SIZE: (b + 1) * BATCH_SIZE] = p.cpu().numpy()
+            preds[b * BATCH_SIZE : (b + 1) * BATCH_SIZE] = p.cpu().numpy()
 
     ids = path_loader.ids
     filenames = [path_loader.id_to_filename(i, "audio") for i in ids]
