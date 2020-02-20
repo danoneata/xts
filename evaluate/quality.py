@@ -6,6 +6,8 @@ import sys
 import librosa
 import numpy as np
 
+from scipy import stats
+
 from pystoi.stoi import stoi
 
 from pypesq import pesq
@@ -28,6 +30,19 @@ def compute_pesq(gt, pr):
     gt1 = librosa.resample(gt, SAMPLING_RATE, sampling_rate)
     pr1 = librosa.resample(pr, SAMPLING_RATE, sampling_rate)
     return pesq(gt1, pr1, sampling_rate)
+
+
+def postprocess(gt, pr):
+    def trim(a):
+        return librosa.effects.trim(a)[0]
+    def scale(a):
+        return a * 1 / max(abs(a))
+    def align(x, y):
+        n = min(len(x), len(y))
+        return x[:n], y[:n]
+    # return align(gt, pr)
+    return align(scale(gt), scale(pr))
+    # return align(scale(trim(gt)), scale(trim(pr)))
 
 
 SAMPLING_RATE = 16_000
@@ -75,31 +90,31 @@ def get_argument_parser():
     return parser
 
 
-def evaluate(args):
-    load_audio = lambda p: librosa.core.load(p, SAMPLING_RATE)[0]
-    compute_metric = METRICS[args.metric]
-    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
-
-    for id1 in path_loader.ids:
+def evaluate(metric_name, path_loader, path_predictions):
+    def evaluate1(id1):
         filename = path_loader.id_to_filename(id1, "audio")
 
         path_gt = os.path.join(path_loader.folders["audio"], filename)
-        path_pr = os.path.join(args.predictions, filename)
+        path_pr = os.path.join(path_predictions, filename)
 
         audio_gt = load_audio(path_gt)
         audio_pr = load_audio(path_pr)
 
-        #
-        # print(len(audio_pr))
-        metric = compute_metric(audio_gt, audio_pr[:len(audio_gt)])
-        print(metric)
-        pdb.set_trace()
+        return compute_metric(*postprocess(audio_gt, audio_pr))
+
+    load_audio = lambda p: librosa.core.load(p, SAMPLING_RATE)[0]
+    compute_metric = METRICS[metric_name]
+    return [evaluate1(id1) for id1 in path_loader.ids]
 
 
 def main():
     parser = get_argument_parser()
     args = parser.parse_args()
-    evaluate(args)
+    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
+    results = evaluate(args.metric, path_loader, args.predictions)
+    # Print results
+    print(np.mean(results))
+    print(stats.describe(results))
 
 
 if __name__ == "__main__":
