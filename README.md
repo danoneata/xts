@@ -1,7 +1,13 @@
 Installation steps:
-```
+```bash
 conda env create -f environment.yml
 pip install -r requirements.txt
+```
+
+Clone tacotron2:
+
+```bash
+git clone https://github.com/NVIDIA/tacotron2.git
 ```
 
 The code is organized as follows:
