@@ -11,7 +11,7 @@ from constants import FPS
 Sample = namedtuple("Sample", "key video_path audio_path frame_path speaker sentence landmarks audio_alignment video_alignment")
 
 
-DATA_DIR = "data"
+DATA_DIR = "data/grid"
 FILELISTS = {
     "tiny": os.path.join(DATA_DIR, "filelists", "tiny.txt"),
     "tiny-train": os.path.join(DATA_DIR, "filelists", "tiny-train.txt"),
@@ -112,6 +112,11 @@ def load_data(split):
         for key, speaker in key_and_speaker
 	if speaker != "s21"
     ]
+
+
+def drop_sil(sentence):
+    words = sentence.split(" ")
+    return " ".join(word for word in words if word not in {"sil", "sp"})
 
 
 if __name__ == "__main__":
