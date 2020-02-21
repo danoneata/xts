@@ -101,7 +101,12 @@ def get_argument_parser():
 
 def train(args, trial, is_train=True, study=None):
 
+    train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
+    valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
+
+    num_speakers = len(train_path_loader.speaker_to_id)
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
+    dataset_parameters["num_speakers"] = num_speakers
 
     model = MODELS[args.model_type](dataset_parameters, trial.parameters)
 
@@ -124,9 +129,6 @@ def train(args, trial, is_train=True, study=None):
         prepare_batch = prepare_batch_3
     else:
         assert False, "Unknown speaker info"
-
-    train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
-    valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
 
     train_dataset = Dataset(train_path_loader, transforms=TRAIN_TRANSFORMS)
     valid_dataset = Dataset(valid_path_loader, transforms=VALID_TRANSFORMS)
