@@ -64,8 +64,8 @@ def collate_fn(batches):
     else:
         extra = [batch[2:] for batch in batches if batch[0] is not None]
         extra = default_collate(extra)
-        extra = torch.cat(extra)
-        return video, spect, extra
+        # extra = torch.cat(extra)
+        return [video, spect] + extra
 
 
 DATASET_PARAMETERS = {
@@ -240,3 +240,24 @@ class xTSDatasetSpeakerEmbedding(xTSDataset):
         embedding = self.speaker_embeddings[i]
         embedding = torch.tensor(embedding).float()
         return video, spect, embedding
+
+
+class xTSDatasetSpeakerIdEmbedding(xTSDataset):
+    def __init__(self, *args, **kwargs):
+        super(xTSDatasetSpeakerIdEmbedding, self).__init__(*args, **kwargs)
+        data_embedding = np.load(self.paths["speaker-embeddings"][0])
+        self.speaker_embeddings = data_embedding["feats"]
+        self.id_to_index = {
+            id1: index for index, id1 in enumerate(data_embedding["ids"])
+        }
+
+    def __getitem__(self, idx: int):
+        video, spect = super(xTSDatasetSpeakerIdEmbedding, self).__getitem__(idx)
+        # id
+        id_ = self.path_loader.speaker_to_id[self.path_loader.speakers[idx]]
+        id_ = torch.tensor(id_).long()
+        # embedding
+        i = self.id_to_index[self.path_loader.ids[idx]]
+        embedding = self.speaker_embeddings[i]
+        embedding = torch.tensor(embedding).float()
+        return video, spect, id_, embedding

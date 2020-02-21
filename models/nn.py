@@ -116,6 +116,12 @@ class Bjorn(nn.Module):
         x = self._concat_embedding(x, emb)
         return self.decoder(x, y)
 
+    def forward_emb(self, inp):
+        x, y, emb = inp
+        z = self.video_encoder(x)
+        s = self._concat_embedding(z, emb)
+        return self.decoder(s, y), z
+
     def predict(self, inp):
         x, emb = inp
         x = self.video_encoder(x)

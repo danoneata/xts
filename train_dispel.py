@@ -72,8 +72,16 @@ class TemporalClassifier(nn.Module):
 
 def train(args, trial, is_train=True, study=None):
 
-    Dataset = src.dataset.xTSDatasetSpeakerId
-    prepare_batch = prepare_batch_3
+    if args.model_type in {"bjorn"}:
+        Dataset = src.dataset.xTSDatasetSpeakerIdEmbedding
+        def prepare_batch(batch, device, non_blocking):
+            for i in range(len(batch)):
+                batch[i] = batch[i].to(device)
+            batch_x, batch_y, _, emb = batch
+            return (batch_x, batch_y, emb), batch_y
+    else:
+        Dataset = src.dataset.xTSDatasetSpeakerId
+        prepare_batch = prepare_batch_3
 
     train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
     valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
@@ -119,7 +127,7 @@ def train(args, trial, is_train=True, study=None):
         model_speaker.train()
 
         x, y = prepare_batch(batch, device=device, non_blocking=True)
-        _, _, i = x
+        i = batch[2]
 
         # Generator: generates audio and dispels speaker identity
         y_pred, z = model.forward_emb(x)
