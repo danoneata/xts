@@ -127,7 +127,7 @@ def train(args, trial, is_train=True, study=None):
         model_speaker.train()
 
         x, y = prepare_batch(batch, device=device, non_blocking=True)
-        i = batch[2]
+        i = batch[2].to(device)
 
         # Generator: generates audio and dispels speaker identity
         y_pred, z = model.forward_emb(x)
