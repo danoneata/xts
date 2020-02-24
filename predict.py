@@ -37,7 +37,12 @@ def predict_emb(model, inp, emb):
 
 
 def predict(args):
+    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
+
+    num_speakers = len(path_loader.speaker_to_id)
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
+    dataset_parameters["num_speakers"] = num_speakers
+
     model = MODELS[args.model_type](dataset_parameters)
 
     model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
@@ -64,7 +69,6 @@ def predict(args):
         assert False, "Unknown speaker info"
 
     # Prepare data loader
-    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
     dataset = Dataset(path_loader, transforms=VALID_TRANSFORMS)
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
