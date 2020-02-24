@@ -35,6 +35,7 @@ from train import (
     TRAIN_TRANSFORMS,
     VALID_TRANSFORMS,
     collate_fn,
+    link_best_model,
     get_argument_parser,
     prepare_batch_2,
     prepare_batch_3,
@@ -235,7 +236,10 @@ def train(args, trial, is_train=True, study=None):
 
     if is_train:
         torch.save(model.state_dict(), model_path)
-        print("Model saved at:", model_path)
+        print("Last model @", model_path)
+
+        model_best_path = link_best_model(model_name)
+        print("Best model @", model_best_path)
 
     return evaluator.state.metrics["loss"]
 
