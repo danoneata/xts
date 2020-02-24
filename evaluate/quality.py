@@ -8,6 +8,9 @@ import numpy as np
 
 from scipy import stats
 
+from mcd import dtw
+from mcd.metrics_fast import logSpecDbDist as log_spec_db_dist
+
 from pystoi.stoi import stoi
 
 from pypesq import pesq
@@ -32,14 +35,37 @@ def compute_pesq(gt, pr):
     return pesq(gt1, pr1, sampling_rate)
 
 
+def compute_mcd(gt, pr):
+    def get_mfcc(audio):
+        # n_mfcc=60, n_fft=2048, hop_length=275, win_length=1100
+        mfcc = librosa.feature.mfcc(audio, sr=16_000, htk=False)
+        # mfcc = mfcc
+        mfcc = mfcc.T
+        mfcc = mfcc.astype("float64")
+        return mfcc
+
+    mfcc_gt = get_mfcc(gt)
+    mfcc_pr = get_mfcc(pr)
+
+    # cost, _ = dtw.dtw(mfcc_gt, mfcc_pr, log_spec_db_dist)
+    cost = sum(log_spec_db_dist(g, p) for g, p in zip(mfcc_gt, mfcc_pr))
+    num_frames = len(mfcc_gt)
+    pdb.set_trace()
+
+    return cost / num_frames
+
+
 def postprocess(gt, pr):
     def trim(a):
         return librosa.effects.trim(a)[0]
+
     def scale(a):
         return a * 1 / max(abs(a))
+
     def align(x, y):
         n = min(len(x), len(y))
         return x[:n], y[:n]
+
     # return align(gt, pr)
     return align(scale(gt), scale(pr))
     # return align(scale(trim(gt)), scale(trim(pr)))
@@ -49,7 +75,7 @@ SAMPLING_RATE = 16_000
 METRICS = {
     "stoi": compute_stoi,
     "pesq": compute_pesq,
-    # "mcd": ???,
+    "mcd": compute_mcd,
 }
 
 
