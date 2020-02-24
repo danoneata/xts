@@ -2,12 +2,14 @@ import argparse
 import os
 import os.path
 import pdb
+import re
 import sys
 import time
 
 import numpy as np
 
 from types import SimpleNamespace
+from toolz import first
 
 import torch
 import torch.nn as nn
@@ -34,6 +36,7 @@ from models import MODELS
 from models.nn import SpeakerInfo
 
 ROOT = os.environ.get("ROOT", "data")
+CHECKPOINTS_DIR = "output/models/checkpoints"
 
 SEED = 1337
 EVERY_K_ITERS = 512
@@ -97,6 +100,27 @@ def get_argument_parser():
     )
     parser.add_argument("-v", "--verbose", action="count", help="verbosity level")
     return parser
+
+
+def link_best_model(model_name):
+    pattern = re.compile(r'(.*)_model_[0-9]+_objective=([\-0-9.]+).pth')
+
+    def is_match(filename, model_name):
+        m = pattern.search(filename)
+        return m and m.group(1) == model_name
+
+    def best_score(filename):
+        m = pattern.search(filename)
+        return - float(m.group(2))
+
+    files = [f for f in os.listdir(CHECKPOINTS_DIR) if is_match(f, model_name)]
+    name = first(sorted(files, key=best_score))
+
+    src = os.path.join('checkpoints', name)
+    dst = f"output/models/{model_name}_best.pth"
+
+    os.symlink(src, dst)
+    return dst
 
 
 def train(args, trial, is_train=True, study=None):
@@ -204,7 +228,7 @@ def train(args, trial, is_train=True, study=None):
             return trainer.state.iteration // EVERY_K_ITERS
 
         checkpoint_handler = ignite.handlers.ModelCheckpoint(
-            "output/models/checkpoints",
+            CHECKPOINTS_DIR,
             model_name,
             score_name="objective",
             score_function=score_function,
@@ -221,7 +245,10 @@ def train(args, trial, is_train=True, study=None):
 
     if is_train:
         torch.save(model.state_dict(), model_path)
-        print("Model saved at:", model_path)
+        print("Last model @", model_path)
+
+        model_best_path = link_best_model(model_name)
+        print("Best model @", model_best_path)
 
     return evaluator.state.metrics["loss"]
 
