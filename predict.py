@@ -37,9 +37,10 @@ def predict_emb(model, inp, emb):
 
 
 def predict(args):
-    path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
+    tr_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist_train + "-train")
+    te_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-" + args.split)
 
-    num_speakers = len(path_loader.speaker_to_id)
+    num_speakers = len(tr_path_loader.speaker_to_id)
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
     dataset_parameters["num_speakers"] = num_speakers
 
@@ -69,7 +70,7 @@ def predict(args):
         assert False, "Unknown speaker info"
 
     # Prepare data loader
-    dataset = Dataset(path_loader, transforms=VALID_TRANSFORMS)
+    dataset = Dataset(te_path_loader, transforms=VALID_TRANSFORMS)
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
@@ -82,16 +83,21 @@ def predict(args):
     if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
         emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
         predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
-    if (
+    elif (
         model.speaker_info is SpeakerInfo.ID
         and args.embedding
         and args.embedding.startswith("spk")
     ):
         _, speaker = args.embedding.split("-")
-        id1 = path_loader.speaker_to_id[speaker]
+        id1 = tr_path_loader.speaker_to_id[speaker]
         emb = model.speaker_embedding.weight[id1]
         predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
     else:
+        if model.speaker_info is SpeakerInfo.ID:
+            # check that speakers agree
+            get_speakers = lambda p: sorted(p.speaker_to_id.keys())
+            same_speakers = get_speakers(tr_path_loader) == get_speakers(te_path_loader)
+            assert same_speakers, "speakers in the two filelists do not agree"
         predict1 = lambda model, inp: model.predict(inp)
 
     with torch.no_grad():
@@ -100,8 +106,8 @@ def predict(args):
             p = predict1(model, (x, extra))
             preds[b * BATCH_SIZE : (b + 1) * BATCH_SIZE] = p.cpu().numpy()
 
-    ids = path_loader.ids
-    filenames = [path_loader.id_to_filename(i, "audio") for i in ids]
+    ids = te_path_loader.ids
+    filenames = [te_path_loader.id_to_filename(i, "audio") for i in ids]
     np.savez(args.output_path, ids=ids, filenames=filenames, preds=preds)
 
 
@@ -124,6 +130,10 @@ def main():
         help="where to store the predictions",
     )
     parser.add_argument(
+        "--filelist-train",
+        help="name of filelist used for training (default, the same as `filelist`)",
+    )
+    parser.add_argument(
         "-e",
         "--embedding",
         # choices={"mean", None},
@@ -131,6 +141,7 @@ def main():
     )
 
     args = parser.parse_args()
+    args.filelist_train = args.filelist_train or args.filelist
     predict(args)
 
 
