@@ -109,7 +109,7 @@ def train(args, trial, is_train=True, study=None):
         model.load_state_dict(torch.load(args.model_path))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=trial.parameters["lr"])  # 0.001
-    optimizer_speaker = torch.optim.Adam(model_speaker.parameters(), lr=0.004)
+    optimizer_speaker = torch.optim.Adam(model_speaker.parameters(), lr=0.001)
 
     mse_loss = nn.MSELoss()
 
