@@ -50,7 +50,6 @@ def compute_mcd(gt, pr):
     # cost, _ = dtw.dtw(mfcc_gt, mfcc_pr, log_spec_db_dist)
     cost = sum(log_spec_db_dist(g, p) for g, p in zip(mfcc_gt, mfcc_pr))
     num_frames = len(mfcc_gt)
-    pdb.set_trace()
 
     return cost / num_frames
 
