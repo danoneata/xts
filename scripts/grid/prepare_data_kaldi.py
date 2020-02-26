@@ -80,7 +80,7 @@ def main():
     spk_utt = []
 
     with open(wav_scp, 'w') as f, open(utt2spk, 'w') as g, open(text, 'w') as h:
-        for p in files:
+        for p in sorted(files, key=get_utt_id):
             utt_id = get_utt_id(p)
             spk_id = get_spk_id(p)
             spk_2d = f"s{spk_id:02d}"
