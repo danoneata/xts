@@ -46,9 +46,6 @@ def predict(args):
 
     model = MODELS[args.model_type](dataset_parameters)
 
-    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
-    model_path = f"output/models/{model_name}.pth"
-
     # Initialize model from existing one.
     model.load_state_dict(torch.load(args.model_path))
     model.eval()
