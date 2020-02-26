@@ -110,6 +110,9 @@ class Bjorn(nn.Module):
         x = torch.cat((x, e), dim=2)
         return x
 
+    def _encode_video(self, x):
+        return self.video_encoder(x)
+
     def forward(self, inp):
         x, y, emb = inp
         x = self.video_encoder(x)

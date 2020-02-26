@@ -61,8 +61,12 @@ def predict(args):
         Dataset = src.dataset.xTSDatasetSpeakerId
         prepare_batch = prepare_batch_3
     elif model.speaker_info is SpeakerInfo.EMBEDDING:
-        Dataset = src.dataset.xTSDatasetSpeakerEmbedding
-        prepare_batch = prepare_batch_3
+        if args.filelist == args.filelist_train:
+            Dataset = src.dataset.xTSDatasetSpeakerEmbedding
+            prepare_batch = prepare_batch_3
+        else:
+            Dataset = src.dataset.xTSDatasetSpeakerId
+            prepare_batch = prepare_batch_3
     else:
         assert False, "Unknown speaker info"
 
@@ -80,6 +84,11 @@ def predict(args):
     if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
         emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
         predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    elif model.speaker_info is SpeakerInfo.EMBEDDING and args.embedding == "mean":
+        data_embedding = np.load(tr_path_loader.paths["speaker-embeddings"][0])
+        speaker_embeddings = torch.tensor(data_embedding["feats"]).float()
+        emb = speaker_embeddings.mean(dim=0, keepdim=True).to(DEVICE)
+        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
     elif (
         model.speaker_info is SpeakerInfo.ID
         and args.embedding
@@ -95,6 +104,8 @@ def predict(args):
             get_speakers = lambda p: sorted(p.speaker_to_id.keys())
             same_speakers = get_speakers(tr_path_loader) == get_speakers(te_path_loader)
             assert same_speakers, "speakers in the two filelists do not agree"
+        elif model.speaker_info is SpeakerInfo.Embedding:
+            assert False
         predict1 = lambda model, inp: model.predict(inp)
 
     with torch.no_grad():
