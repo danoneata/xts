@@ -11,6 +11,8 @@ from scipy import stats
 from mcd import dtw
 from mcd.metrics_fast import logSpecDbDist as log_spec_db_dist
 
+import python_speech_features
+
 from pystoi.stoi import stoi
 
 from pypesq import pesq
@@ -35,14 +37,22 @@ def compute_pesq(gt, pr):
     return pesq(gt1, pr1, sampling_rate)
 
 
-def compute_mcd(gt, pr):
-    def get_mfcc(audio):
+def compute_mcd(gt, pr, type1="librosa"):
+
+    def get_mfcc_psf(audio):
+        return python_speech_features.mfcc(audio, sr=16_000)
+
+    def get_mfcc_librosa(audio):
         # n_mfcc=60, n_fft=2048, hop_length=275, win_length=1100
         mfcc = librosa.feature.mfcc(audio, sr=16_000, htk=False)
-        # mfcc = mfcc
-        mfcc = mfcc.T
-        mfcc = mfcc.astype("float64")
-        return mfcc
+        return mfcc.astype("float64").T
+
+    GET_MFCC = {
+        "librosa": get_mfcc_librosa,
+        "python-speech-features": get_mfcc_psf,
+    }
+
+    get_mfcc = GET_MFCC[type1]
 
     mfcc_gt = get_mfcc(gt)
     mfcc_pr = get_mfcc(pr)
@@ -50,6 +60,9 @@ def compute_mcd(gt, pr):
     # cost, _ = dtw.dtw(mfcc_gt, mfcc_pr, log_spec_db_dist)
     cost = sum(log_spec_db_dist(g, p) for g, p in zip(mfcc_gt, mfcc_pr))
     num_frames = len(mfcc_gt)
+    # NumPy implementation of MCD:
+    # > K = 10 / np.log(10) * np.sqrt(2)
+    # > K * np.mean(np.sqrt(np.sum((mfcc_gt - mfcc_pr) ** 2, axis=1)))
 
     return cost / num_frames
 
