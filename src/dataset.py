@@ -225,6 +225,17 @@ class xTSDatasetSpeakerId(xTSDataset):
         return video, spect, id_
 
 
+class xTSDatasetSpeakerIdFilename(xTSDataset):
+    def __init__(self, *args, **kwargs):
+        super(xTSDatasetSpeakerIdFilename, self).__init__(*args, **kwargs)
+
+    def __getitem__(self, idx: int):
+        video, spect = super(xTSDatasetSpeakerIdFilename, self).__getitem__(idx)
+        id_ = self.path_loader.speaker_to_id[self.path_loader.speakers[idx]]
+        id_ = torch.tensor(id_).long()
+        return video, spect, id_, self.path_loader.ids[idx]
+
+
 class xTSDatasetSpeakerEmbedding(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerEmbedding, self).__init__(*args, **kwargs)
