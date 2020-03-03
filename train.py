@@ -119,7 +119,12 @@ def link_best_model(model_name):
     src = os.path.join('checkpoints', name)
     dst = f"output/models/{model_name}_best.pth"
 
-    os.symlink(src, dst)
+    try:
+        os.symlink(src, dst)
+    except FileExistsError:
+        os.unlink(dst)
+        os.symlink(src, dst)
+
     return dst
 
 
