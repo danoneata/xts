@@ -55,6 +55,7 @@ def extract_visual_features(args):
     )
 
     model = MODELS[args.model_type](dataset_parameters)
+    model.load_state_dict(torch.load(args.model_path))
     model.eval()
     model.to(DEVICE)
 
