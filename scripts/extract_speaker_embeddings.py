@@ -1,12 +1,14 @@
 # source ~/src/vgg-speaker-recognition/venv/bin/activate
-# 
+#
 import argparse
 import os
 import pdb
 import random
 import sys
 
+from abc import ABCMeta, abstractmethod
 from itertools import product
+from typing import Any, Callable
 
 import numpy as np
 import tensorflow as tf
@@ -32,31 +34,77 @@ PARAMS = {
     "sampling_rate": 16000,
     "feat_dim": 512,
     "normalize": True,
-    "model_path": "/home/doneata/src/vgg-speaker-recognition/model/weights.h5", 
+    "model_path": "/home/doneata/src/vgg-speaker-recognition/model/weights.h5",
 }
 
 SEED = 1337
 random.seed(SEED)
 
+class Dataset(metaclass=ABCMeta):
+    @abstractmethod
+    def load_ids_and_paths(self, filelist: str):
+        pass
 
-class GridDataset:
+    @abstractmethod
+    def get_path_emb(self, filelist: str):
+        pass
+
+
+class GridDataset(Dataset):
     def load_ids_and_paths(self, filelist):
         with open(os.path.join(ROOT, "grid", "filelists", filelist + ".txt"), "r") as f:
             ids = [line.strip() for line in f.readlines()]
+
         def get_path(id1):
             file_, folder = id1.split()
             return os.path.join(ROOT, "grid", "audio-16khz", folder, file_ + AUDIO_EXT)
+
         paths = list(map(get_path, ids))
         return ids, paths
 
+    def get_path_emb(self, filelist):
+        return os.path.join(ROOT, "grid", "speaker-embeddings", filelist + ".npz")
 
-class LRWDataset:
+
+class LRWDataset(Dataset):
     def load_ids_and_paths(self, filelist):
         with open(os.path.join(ROOT, "lrw", "filelists", filelist + ".txt"), "r") as f:
             ids = [line.strip() for line in f.readlines()]
         get_path = lambda i: os.path.join(ROOT, "lrw", "audio-from-video", i + ".wav")
         paths = list(map(get_path, ids))
         return ids, paths
+
+    def get_path_emb(self, filelist):
+        return os.path.join(ROOT, "lrw", "speaker-embeddings", filelist + ".npz")
+
+
+class GridSyntheticDataset(Dataset):
+    def __init__(self, model_name):
+        self.model_name = model_name
+
+    def load_ids_and_paths(self, filelist):
+        with open(os.path.join(ROOT, "grid", "filelists", filelist + ".txt"), "r") as f:
+            ids = [line.strip() for line in f.readlines()]
+
+        def get_path(id1):
+            file_, folder = id1.split()
+            return os.path.join(
+                "output",
+                "synth-samples",
+                f"grid-multi-speaker-{filelist}-{self.model_name}",
+                folder,
+                file_ + AUDIO_EXT,
+            )
+
+        paths = list(map(get_path, ids))
+        return ids, paths
+
+    def get_path_emb(self, filelist):
+        return os.path.join(
+            "output",
+            "speaker-embeddings",
+            f"grid-multi-speaker-{filelist}-{self.model_name}.npz",
+        )
 
 
 def get_arg_parser():
@@ -129,10 +177,15 @@ def evaluate(feats, labels, num_pairs=10_000):
     print("EER: {:.3f}%".format(eer))
 
 
+TR_SPEAKERS = "s1 s10 s12 s14 s15 s17 s22 s26 s28 s3 s32 s5 s6 s7".split()
 DATASETS = {
-    'grid': GridDataset,
-    'lrw': LRWDataset,
+    "grid": lambda: GridDataset(),
+    "lrw": lambda: LRWDataset(),
 }
+
+for s in TR_SPEAKERS:
+    key = f"magnus-multi-speaker-best-emb-spk-{s}"
+    DATASETS[f"synth:{key}"] = lambda key=key: GridSyntheticDataset(key)
 
 
 def main():
@@ -143,10 +196,11 @@ def main():
     ids, paths = dataset.load_ids_and_paths(args.filelist)
     feats = extract_features(paths, args)
 
-    path_emb = os.path.join(ROOT, args.dataset, "speaker-embeddings", args.filelist + ".npz")
-    np.savez(path_emb, ids=ids, feats=feats)
+    np.savez(dataset.get_path_emb(args.filelist), ids=ids, feats=feats)
 
-    if args.to_evaluate and args.dataset == "grid":  # we don't have speaker information for LRW
+    if (
+        args.to_evaluate and args.dataset == "grid"
+    ):  # we don't have speaker information for LRW
         labels = [folder for _, folder in ids]
         evaluate(feats, labels)
 
