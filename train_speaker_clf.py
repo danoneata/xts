@@ -22,21 +22,29 @@ import ignite.handlers
 from hparams import hparams
 
 from train import (
-    EVERY_K_ITERS,
     LR_REDUCE_PARAMS,
     PATH_LOADERS,
-    PATIENCE,
     ROOT,
-    link_best_model,
 )
 
-from train_dispel import TemporalClassifier
 
-
-PATIENCE = 32
-EVERY_K_ITERS = 64
-MAX_EPOCHS = 256 * 64
+MAX_EPOCHS = 2 ** 16
 BATCH_SIZE = 256
+PATIENCE = 16
+
+
+class LinearTemporalClassifier(nn.Module):
+    def __init__(self, input_dim, n_classes):
+        super(LinearTemporalClassifier, self).__init__()
+        self.linear = nn.Sequential(
+            nn.Linear(input_dim, n_classes),
+            nn.LogSoftmax(dim=-1),
+        )
+
+    def forward(self, x):
+        x = x.mean(dim=1)
+        x = self.linear(x)
+        return x
 
 
 class SpeakerClassificationDataset(torch.utils.data.Dataset):
@@ -60,13 +68,13 @@ class SpeakerClassificationDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int):
         if idx >= len(self):
             raise IndexError
-        x = self.pca.transform(self.features[idx])
+        x = self.features[idx]
         y = self.speaker_to_id[self.speakers[idx]]
         return x, y
 
 
 def train(args, trial, is_train=True, study=None):
-    visual_embedding_dim = 16
+    visual_embedding_dim = 512
     device = "cuda"
 
     path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
@@ -76,23 +84,13 @@ def train(args, trial, is_train=True, study=None):
     speaker_to_id = path_loader.speaker_to_id
 
     train_dataset = SpeakerClassificationDataset(
-        speaker_to_id, get_dataset_name("test"), args.xts_model_name
-    )
-    valid_dataset = SpeakerClassificationDataset(
         speaker_to_id, get_dataset_name("valid"), args.xts_model_name
     )
+    valid_dataset = SpeakerClassificationDataset(
+        speaker_to_id, get_dataset_name("test"), args.xts_model_name
+    )
 
-    # train PCA
-    X = train_dataset.features
-    N, T, D = X.shape
-    X = X.reshape(N * T, D)
-    pca = PCA(n_components=visual_embedding_dim)
-    pca.fit(X)
-
-    train_dataset.pca = pca
-    valid_dataset.pca = pca
-
-    model_speaker = TemporalClassifier(visual_embedding_dim, num_speakers)
+    model_speaker = LinearTemporalClassifier(visual_embedding_dim, num_speakers)
 
     kwargs = dict(batch_size=args.batch_size)
     train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)
@@ -110,8 +108,12 @@ def train(args, trial, is_train=True, study=None):
         model_speaker, optimizer, loss, device=device
     )
 
+    metrics_validation = {
+        "loss": ignite.metrics.Loss(loss),
+        "accuracy": ignite.metrics.Accuracy(),
+    }
     evaluator = engine.create_supervised_evaluator(
-        model_speaker, metrics={"loss": ignite.metrics.Loss(loss)}, device=device,
+        model_speaker, metrics=metrics_validation, device=device,
     )
 
     @trainer.on(engine.Events.ITERATION_COMPLETED)
@@ -122,13 +124,15 @@ def train(args, trial, is_train=True, study=None):
             )
         )
 
-    @trainer.on(engine.Events.ITERATION_COMPLETED(every=EVERY_K_ITERS))
+    @trainer.on(engine.Events.EPOCH_COMPLETED)
     def log_validation_loss(trainer):
         evaluator.run(valid_loader)
         metrics = evaluator.state.metrics
         print(
-            "Epoch {:3d} Valid loss: {:8.6f} ←".format(
-                trainer.state.epoch, metrics["loss"]
+            "Epoch {:3d} Valid loss: {:8.6f} Accuracy: {:9.6f} ←".format(
+                trainer.state.epoch,
+                metrics["loss"],
+                metrics["accuracy"],
             )
         )
 
@@ -138,52 +142,20 @@ def train(args, trial, is_train=True, study=None):
 
     @evaluator.on(engine.Events.COMPLETED)
     def update_lr_reduce(engine):
-        loss = engine.state.metrics["loss"]
+        loss = - engine.state.metrics["accuracy"]
         lr_reduce.step(loss)
 
-    @evaluator.on(engine.Events.COMPLETED)
-    def terminate_study(engine):
-        """Stops underperforming trials."""
-        if study and study.should_trial_stop(trial=trial):
-            trainer.terminate()
-
     def score_function(engine):
-        return -engine.state.metrics["loss"]
+        return engine.state.metrics["accuracy"]
 
     early_stopping_handler = ignite.handlers.EarlyStopping(
         patience=PATIENCE, score_function=score_function, trainer=trainer
     )
     evaluator.add_event_handler(engine.Events.COMPLETED, early_stopping_handler)
 
-    if is_train:
-
-        def global_step_transform(*args):
-            return trainer.state.iteration // EVERY_K_ITERS
-
-        checkpoint_handler = ignite.handlers.ModelCheckpoint(
-            "output/models/checkpoints",
-            model_name,
-            score_name="objective",
-            score_function=score_function,
-            n_saved=5,
-            require_empty=False,
-            create_dir=True,
-            global_step_transform=global_step_transform,
-        )
-        evaluator.add_event_handler(
-            engine.Events.COMPLETED, checkpoint_handler, {"model": model_speaker}
-        )
-
     trainer.run(train_loader, max_epochs=args.max_epochs)
 
-    if is_train:
-        torch.save(model_speaker.state_dict(), model_path)
-        print("Last model @", model_path)
-
-        model_best_path = link_best_model(model_name)
-        print("Best model @", model_best_path)
-
-    return evaluator.state.metrics["loss"]
+    return evaluator.state.metrics["accuracy"]
 
 
 def get_argument_parser():
@@ -217,10 +189,11 @@ def main():
     args = parser.parse_args()
     args.batch_size = BATCH_SIZE
     args.max_epochs = MAX_EPOCHS
-    trial = SimpleNamespace(**{"parameters": {"lr": 1e-3}})
+    trial = SimpleNamespace(**{"parameters": {"lr": 1e-2}})
     print(args)
     print(trial)
-    train(args, trial)
+    accuracy = train(args, trial)
+    print(f"{100 * accuracy:.2f}")
 
 
 if __name__ == "__main__":
