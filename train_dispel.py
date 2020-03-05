@@ -49,9 +49,8 @@ BATCH_SIZE = 6
 
 
 class TemporalClassifier(nn.Module):
-    def __init__(self, input_dim, n_classes):
+    def __init__(self, input_dim, n_classes, hidden_dim=64):
         super(TemporalClassifier, self).__init__()
-        hidden_dim = 64
         self.nn_pre = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(inplace=True),
