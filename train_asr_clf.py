@@ -149,12 +149,22 @@ def train(args, trial, is_train=True, study=None):
     num_speakers = len(path_loader.speaker_to_id)
     speaker_to_id = path_loader.speaker_to_id
 
-    train_dataset = ASRClassificationDataset(
-        speaker_to_id, get_dataset_name("valid"), args.xts_model_name
-    )
-    valid_dataset = ASRClassificationDataset(
-        speaker_to_id, get_dataset_name("test"), args.xts_model_name
-    )
+    if args.use_train_data:
+        dataset = ASRClassificationDataset(
+            speaker_to_id, get_dataset_name("train"), args.xts_model_name
+        )
+        n_valid = 14 * 50
+        n_train = len(dataset) - n_valid
+        train_dataset, valid_dataset = torch.utils.data.random_split(
+            dataset, [n_train, n_valid]
+        )
+    else:
+        train_dataset = ASRClassificationDataset(
+            speaker_to_id, get_dataset_name("valid"), args.xts_model_name
+        )
+        valid_dataset = ASRClassificationDataset(
+            speaker_to_id, get_dataset_name("test"), args.xts_model_name
+        )
 
     n_classes = [len(words) for words in ASR_DICTIONARY]
     model_asr = MultiTemporalClassifier(visual_embedding_dim, n_classes)
@@ -246,6 +256,12 @@ def get_argument_parser():
     )
     parser.add_argument(
         "--filelist", type=str, default="tiny2", help="name of the filelist to use",
+    )
+    parser.add_argument(
+        "--use-train-data",
+        action="store_true",
+        default=False,
+        help="use only train data for both training and evaluating",
     )
     parser.add_argument("-v", "--verbose", action="count", help="verbosity level")
     return parser
