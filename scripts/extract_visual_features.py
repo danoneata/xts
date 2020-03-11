@@ -27,7 +27,7 @@ from src.dataset import xTSDatasetSpeakerIdFilename  # type: ignore
 from hparams import hparams
 
 
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 DEVICE = "cuda"
 NON_BLOCKING = False
 
