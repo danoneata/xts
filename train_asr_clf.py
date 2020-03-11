@@ -134,6 +134,8 @@ class WER(Metric):
             a.update((p, t))
 
     def compute(self):
+        fmt = lambda wer: f"{100 * wer:4.1f}"
+        print(" | ".join(fmt(1 - a.compute()) for a in self.accuracies))
         return 1 - sum(a.compute() for a in self.accuracies) / len(self.accuracies)
 
 
