@@ -44,6 +44,15 @@ class Tacotron2(nn.Module):
         )
 
         self.postnet = Postnet(hparams)
+        self.drop_frame_rate = hparams.drop_frame_rate
+
+    def drop_frames(self, y):
+        B, T, _ = y.shape
+        M = torch.empty([B, T, 1], device=y.device).uniform_(0.0, 1.0)
+        M = M < self.drop_frame_rate
+        M = M.float()
+        z = (1 - M) * y + M * self.mel_mean
+        return z
 
     def shift(self, y):
         B, _, D = y.shape
@@ -86,6 +95,13 @@ class Tacotron2(nn.Module):
 
         # x.shape →  B, S / 3, Dx
         # z.shape →  B, S    , Dz
+
+        # replaces mel frames with global mean in order to weaken dependency on
+        # the autoregressive part; see the following references:
+        # - https://arxiv.org/pdf/1909.01145.pdf
+        # - https://github.com/NVIDIA/tacotron2/compare/master...bfs18:master
+        if self.training and self.drop_frame_rate > 0:
+            y = self.drop_frames(y)
 
         # shifts labels such that they are not seen at training
         z = self.shift(y)

@@ -16,7 +16,6 @@ from torchvision.models import resnet18
 
 import src.dataset
 
-from hparams import hparams
 from models.speech_synthesis import Tacotron2
 
 
@@ -30,26 +29,26 @@ class SpeakerInfo(enum.Enum):
 
 
 class VideoEncoder(nn.Module):
-    def __init__(self, params):
+    def __init__(self, hparams):
         super(VideoEncoder, self).__init__()
-        self.params = SimpleNamespace(**params)
+        self.hparams = hparams
         # use 3d convolution to extract features in time
         self.conv0_3d = nn.Sequential(
             nn.Conv3d(
                 1,  # single channel as the images are converted to gray-scale
-                self.params.conv3d_num_filters,
-                kernel_size=self.params.conv3d_kernel_size,
+                hparams.conv3d_num_filters,
+                kernel_size=hparams.conv3d_kernel_size,
                 stride=(1, 1, 1),
-                padding=tuple(get_same_padding(s) for s in self.params.conv3d_kernel_size),
+                padding=tuple(get_same_padding(s) for s in hparams.conv3d_kernel_size),
                 bias=False,
             ),
-            nn.BatchNorm3d(self.params.conv3d_num_filters),
+            nn.BatchNorm3d(hparams.conv3d_num_filters),
             nn.ReLU(inplace=True),
         )
         self.encoder = resnet18()
         # update first layer of the resnet to match the `conv0_3d` layer
         self.encoder.conv1 = nn.Conv2d(
-            self.params.conv3d_num_filters,
+            hparams.conv3d_num_filters,
             64,
             kernel_size=(7, 7),
             stride=(2, 2),
@@ -61,8 +60,8 @@ class VideoEncoder(nn.Module):
         self.encoder_rnn = nn.LSTM(
             input_size=hparams.encoder_embedding_dim,
             hidden_size=hparams.encoder_embedding_dim,
-            num_layers=self.params.encoder_rnn_num_layers,
-            dropout=self.params.encoder_rnn_dropout,
+            num_layers=hparams.encoder_rnn_num_layers,
+            dropout=hparams.encoder_rnn_dropout,
         )
 
     def forward(self, x):
@@ -74,11 +73,11 @@ class VideoEncoder(nn.Module):
         # B, S, conv3d_num_filters, H, W
         x = x.permute(0, 2, 1, 3, 4)
         # BS, conv3d_num_filters, H, W
-        x = x.reshape(B * S, self.params.conv3d_num_filters, H, W)
+        x = x.reshape(B * S, self.hparams.conv3d_num_filters, H, W)
         # BS, D, 1, 1
         x = self.encoder(x)
         # B, S, D
-        x = x.squeeze().view(B, S, hparams.encoder_embedding_dim)
+        x = x.squeeze().view(B, S, self.hparams.encoder_embedding_dim)
         # S, B, D
         x = x.permute(1, 0, 2)
         # S, B, D
@@ -90,15 +89,17 @@ class VideoEncoder(nn.Module):
 
 class Bjorn(nn.Module):
     """xTS model that uses pre-computed speaker embeddings"""
+
     speaker_info = SpeakerInfo.EMBEDDING
 
-    def __init__(self, dataset_params, params):
+    def __init__(self, dataset_params, hparams):
         super(Bjorn, self).__init__()
+        assert hparams.speaker_embedding_dim is not None
         E_DIM_IN = 512
-        E_DIM_OUT = params["speaker_embedding_dim"]
+        E_DIM_OUT = hparams.speaker_embedding_dim
         hparams_copy = SimpleNamespace(**vars(hparams))
         hparams_copy.encoder_embedding_dim += E_DIM_OUT
-        self.video_encoder = VideoEncoder(params)
+        self.video_encoder = VideoEncoder(hparams)
         self.linear = nn.Linear(E_DIM_IN, E_DIM_OUT)
         self.decoder = Tacotron2(hparams_copy, dataset_params)
 
@@ -135,28 +136,29 @@ class Bjorn(nn.Module):
 
 class Sven(nn.Module):
     """xTS model that can use speaker id's to learn speaker embeddings"""
+
     speaker_info = SpeakerInfo.ID
 
-    def __init__(self, dataset_params, params):
+    def __init__(self, dataset_params, hparams):
         super(Sven, self).__init__()
-        self.params = SimpleNamespace(**params)
+        self.hparams = hparams
         # use 3d convolution to extract features in time
         self.conv0_3d = nn.Sequential(
             nn.Conv3d(
                 1,  # single channel as the images are converted to gray-scale
-                self.params.conv3d_num_filters,
-                kernel_size=self.params.conv3d_kernel_size,
+                hparams.conv3d_num_filters,
+                kernel_size=hparams.conv3d_kernel_size,
                 stride=(1, 1, 1),
-                padding=tuple(get_same_padding(s) for s in self.params.conv3d_kernel_size),
+                padding=tuple(get_same_padding(s) for s in hparams.conv3d_kernel_size),
                 bias=False,
             ),
-            nn.BatchNorm3d(self.params.conv3d_num_filters),
+            nn.BatchNorm3d(hparams.conv3d_num_filters),
             nn.ReLU(inplace=True),
         )
         self.encoder = resnet18()
         # update first layer of the resnet to match the `conv0_3d` layer
         self.encoder.conv1 = nn.Conv2d(
-            self.params.conv3d_num_filters,
+            hparams.conv3d_num_filters,
             64,
             kernel_size=(7, 7),
             stride=(2, 2),
@@ -168,17 +170,20 @@ class Sven(nn.Module):
         self.encoder_rnn = nn.LSTM(
             input_size=hparams.encoder_embedding_dim,
             hidden_size=hparams.encoder_embedding_dim,
-            num_layers=self.params.encoder_rnn_num_layers,
-            dropout=self.params.encoder_rnn_dropout,
+            num_layers=hparams.encoder_rnn_num_layers,
+            dropout=hparams.encoder_rnn_dropout,
         )
         self.encoder_embedding_dim = hparams.encoder_embedding_dim
-        if "speaker_embedding_dim" in params and params["speaker_embedding_dim"] > 0:
-            num_embeddings = dataset_params["num_speakers"] # 14  # TODO parameterize
-            speaker_embedding_dim = params["speaker_embedding_dim"]
-            self.speaker_embedding = nn.Embedding(num_embeddings, speaker_embedding_dim)
-            hparams.encoder_embedding_dim = hparams.encoder_embedding_dim + speaker_embedding_dim
+        if hparams.speaker_embedding_dim and hparams.speaker_embedding_dim > 0:
+            num_embeddings = dataset_params["num_speakers"]
+            self.speaker_embedding = nn.Embedding(
+                num_embeddings, hparams.speaker_embedding_dim
+            )
+            hparams.encoder_embedding_dim = (
+                hparams.encoder_embedding_dim + hparams.speaker_embedding_dim
+            )
         else:
-            self.speaker_embedding= None
+            self.speaker_embedding = None
         self.decoder = Tacotron2(hparams, dataset_params)
 
     def _encode_video(self, x):
@@ -190,7 +195,7 @@ class Sven(nn.Module):
         # B, S, conv3d_num_filters, H, W
         x = x.permute(0, 2, 1, 3, 4)
         # BS, conv3d_num_filters, H, W
-        x = x.reshape(B * S, self.params.conv3d_num_filters, H, W)
+        x = x.reshape(B * S, self.hparams.conv3d_num_filters, H, W)
         # BS, D, 1, 1
         x = self.encoder(x)
         # B, S, D
@@ -246,6 +251,6 @@ class Sven(nn.Module):
     def predict2(self, inp):
         # Step-by-step decoding with auxilary information; equivalent to the `forward` method.
         x, y, ids = inp
-        x = self.encode(x)
+        x = self.encode(x, ids)
         _, y = self.decoder.predict2(x, y)
         return y

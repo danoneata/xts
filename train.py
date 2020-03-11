@@ -11,6 +11,10 @@ import numpy as np
 from types import SimpleNamespace
 from toolz import first
 
+from tqdm import tqdm  # type: ignore
+
+from typing import Dict
+
 import torch
 import torch.nn as nn
 import torch.optim.lr_scheduler as lr_scheduler
@@ -23,7 +27,10 @@ from torchvision import transforms
 import ignite.engine as engine
 import ignite.handlers
 
+from hparams import HPARAMS
+
 import src.dataset
+
 from src.dataset import (
     collate_fn,
     prepare_batch_2,
@@ -35,8 +42,13 @@ from src.dataset import (
 from models import MODELS
 from models.nn import SpeakerInfo
 
+from my_utils import cache
+
+
 ROOT = os.environ.get("ROOT", "data")
 CHECKPOINTS_DIR = "output/models/checkpoints"
+DEVICE = "cuda"
+
 
 SEED = 1337
 EVERY_K_ITERS = 512
@@ -73,12 +85,11 @@ VALID_TRANSFORMS = {
 def get_argument_parser():
     parser = argparse.ArgumentParser(description="Evaluate a given model")
     parser.add_argument(
-        "-m",
-        "--model-type",
+        "--hparams",
         type=str,
         required=True,
-        choices=MODELS,
-        help="which model type to train",
+        choices=HPARAMS,
+        help="which hyper-parameter configuration to use",
     )
     parser.add_argument(
         "-d",
@@ -103,7 +114,7 @@ def get_argument_parser():
 
 
 def link_best_model(model_name):
-    pattern = re.compile(r'(.*)_model_[0-9]+_objective=([\-0-9.]+).pth')
+    pattern = re.compile(r"(.*)_model_[0-9]+_objective=([\-0-9.]+).pth")
 
     def is_match(filename, model_name):
         m = pattern.search(filename)
@@ -111,12 +122,15 @@ def link_best_model(model_name):
 
     def best_score(filename):
         m = pattern.search(filename)
-        return - float(m.group(2))
+        if m:
+            return -float(m.group(2))
+        else:
+            assert False, "Pattern did not match"
 
     files = [f for f in os.listdir(CHECKPOINTS_DIR) if is_match(f, model_name)]
     name = first(sorted(files, key=best_score))
 
-    src = os.path.join('checkpoints', name)
+    src = os.path.join("checkpoints", name)
     dst = f"output/models/{model_name}_best.pth"
 
     try:
@@ -128,7 +142,34 @@ def link_best_model(model_name):
     return dst
 
 
+def update_namespace(namespace: SimpleNamespace, dict1: Dict) -> SimpleNamespace:
+    dict0 = namespace.__dict__
+    dict0.update(dict1)
+    return SimpleNamespace(**dict0)
+
+
+def compute_mel_mean(dataset):
+    num_samples = len(dataset)
+    _, num_mel_channels = dataset[0][1].shape
+
+    mel_means = np.zeros((num_samples, num_mel_channels))
+    num_frames = np.zeros((num_samples, 1))
+
+    for i in tqdm(range(num_samples)):
+        _, mels, *_ = dataset[i]
+        if mels is not None:
+            mel_means[i] = mels.mean(dim=0).numpy()
+            num_frames[i] = len(mels)
+        else:
+            pass
+
+    mel_mean = (num_frames * mel_means).sum(axis=0) / num_frames.sum()
+    return {"mel_mean": mel_mean}
+
+
 def train(args, trial, is_train=True, study=None):
+
+    hparams = HPARAMS[args.hparams]
 
     train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
     valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
@@ -137,9 +178,10 @@ def train(args, trial, is_train=True, study=None):
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
     dataset_parameters["num_speakers"] = num_speakers
 
-    model = MODELS[args.model_type](dataset_parameters, trial.parameters)
+    hparams = update_namespace(hparams, trial.parameters)
+    model = MODELS[hparams.model_type](dataset_parameters, hparams)
 
-    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}"
+    model_name = f"{args.dataset}_{args.filelist}_{args.hparams}"
     model_path = f"output/models/{model_name}.pth"
 
     # Initialize model from existing one.
@@ -159,8 +201,17 @@ def train(args, trial, is_train=True, study=None):
     else:
         assert False, "Unknown speaker info"
 
-    train_dataset = Dataset(train_path_loader, transforms=TRAIN_TRANSFORMS)
-    valid_dataset = Dataset(valid_path_loader, transforms=VALID_TRANSFORMS)
+    train_dataset = Dataset(hparams, train_path_loader, transforms=TRAIN_TRANSFORMS)
+    valid_dataset = Dataset(hparams, valid_path_loader, transforms=VALID_TRANSFORMS)
+
+    if hparams.drop_frame_rate:
+        path_mel_mean = os.path.join(
+            "output", "mel-mean", f"{args.dataset}-{args.filelist}.npz"
+        )
+        mel_mean = cache(compute_mel_mean, path_mel_mean)(train_dataset)["mel_mean"]
+        mel_mean = torch.tensor(mel_mean).float().to(DEVICE)
+        mel_mean = mel_mean.unsqueeze(0).unsqueeze(0)
+        model.decoder.mel_mean = mel_mean
 
     kwargs = dict(batch_size=args.batch_size, collate_fn=collate_fn)
     train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)
@@ -173,16 +224,14 @@ def train(args, trial, is_train=True, study=None):
         pred1, pred2 = pred
         return mse_loss(pred1, true) + mse_loss(pred2, true)
 
-    device = "cuda"
-
     trainer = engine.create_supervised_trainer(
-        model, optimizer, loss, device=device, prepare_batch=prepare_batch
+        model, optimizer, loss, device=DEVICE, prepare_batch=prepare_batch
     )
 
     evaluator = engine.create_supervised_evaluator(
         model,
         metrics={"loss": ignite.metrics.Loss(loss)},
-        device=device,
+        device=DEVICE,
         prepare_batch=prepare_batch,
     )
 

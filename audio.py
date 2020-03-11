@@ -8,16 +8,15 @@ import torch
 
 from scipy.signal import lfilter  # type: ignore
 
-from hparams import hparams
-
 sys.path.insert(0, "tacotron2")
 from tacotron2.audio_processing import griffin_lim  # type: ignore
 from tacotron2.layers import TacotronSTFT  # type: ignore
 
 
 class AudioProcessing(metaclass=ABCMeta):
-    def __init__(self, sampling_rate):
+    def __init__(self, sampling_rate, n_mel_channels):
         self.sampling_rate = sampling_rate
+        self.n_mel_channels = n_mel_channels
 
     @abstractmethod
     def audio_to_mel(self, audio: np.ndarray) -> torch.Tensor:
@@ -39,21 +38,21 @@ class Tacotron(AudioProcessing):
 
     def __init__(
         self,
-        sampling_rate=22_050,
+        sampling_rate,
+        n_mel_channels,
         filter_length=1024,
         hop_length=256,
         win_length=1024,
         mel_fmin=0.0,
         mel_fmax=8000.0,
     ):
-        super(Tacotron, self).__init__(sampling_rate)
-        N_MEL_CHANNELS = hparams.n_mel_channels
+        super(Tacotron, self).__init__(sampling_rate, n_mel_channels)
         self.taco_stft = TacotronSTFT(
             filter_length=filter_length,
             hop_length=hop_length,
             win_length=win_length,
             sampling_rate=sampling_rate,
-            n_mel_channels=N_MEL_CHANNELS,
+            n_mel_channels=n_mel_channels,
             mel_fmin=mel_fmin,
             mel_fmax=mel_fmax,
         )
@@ -94,8 +93,8 @@ class DeepConvTTS(AudioProcessing):
     https://github.com/Kyubyong/dc_tts
     
     """
-    def __init__(self, sampling_rate, hop_length=None, win_length=None):
-        super(DeepConvTTS, self).__init__(sampling_rate)
+    def __init__(self, sampling_rate, n_mel_channels, hop_length=None, win_length=None):
+        super(DeepConvTTS, self).__init__(sampling_rate, n_mel_channels)
         self.hop_length = hop_length or int(sampling_rate * 0.0125)
         self.win_length = win_length or int(sampling_rate * 0.05)
         self.n_fft = 1024
@@ -110,7 +109,7 @@ class DeepConvTTS(AudioProcessing):
             sr=self.sampling_rate,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
-            n_mels=hparams.n_mel_channels,
+            n_mels=self.n_mel_channels,
             win_length=self.win_length,
         )
         mel_abs = np.abs(mel)
@@ -135,9 +134,9 @@ class DeepConvTTS(AudioProcessing):
 
 
 AUDIO_PROCESSING = {
-    "deep-conv-tts": lambda sr: DeepConvTTS(sampling_rate=sr),
+    "deep-conv-tts": lambda *args: DeepConvTTS(*args),
     # modules for which the sequence length is a multiple of 3 of the video sequence
     # (works for the GRID dataset and for a sampling rate of 16 kHz)
-    "tacotron-3": lambda sr: Tacotron(sampling_rate=sr, hop_length=212),
-    "deep-conv-tts-3": lambda sr: DeepConvTTS(sampling_rate=sr, hop_length=212),
+    "tacotron-3": lambda *args: Tacotron(*args, hop_length=212),
+    "deep-conv-tts-3": lambda *args: DeepConvTTS(*args, hop_length=212),
 }

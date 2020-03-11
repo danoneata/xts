@@ -24,7 +24,6 @@ from torch.utils.data._utils.collate import default_collate
 
 from toolz import compose
 
-from hparams import hparams
 from audio import AUDIO_PROCESSING
 
 
@@ -69,14 +68,8 @@ def collate_fn(batches):
 
 
 DATASET_PARAMETERS = {
-    "lrw": {
-        "len-inp": 29,
-        "len-out": 98,
-    },
-    "grid": {
-        "len-inp": 75,
-        "len-out": 239,
-    },
+    "lrw": {"len-inp": 29, "len-out": 98,},
+    "grid": {"len-inp": 75, "len-out": 239,},
 }
 
 
@@ -129,7 +122,10 @@ class LRWPathLoader(PathLoader):
             "video": ".mp4",
         }
         self.paths = {
-            k: [os.path.join(self.folders[k], self.id_to_filename(p, k)) for p in self.ids]
+            k: [
+                os.path.join(self.folders[k], self.id_to_filename(p, k))
+                for p in self.ids
+            ]
             for k in ("face", "audio", "video")
         }
         self.paths["speaker-embeddings"] = [
@@ -177,20 +173,23 @@ def get_video_lips(path_face, path_video, transform):
 class xTSDataset(torch.utils.data.Dataset):
     """Implementation of the pytorch Dataset."""
 
-    def __init__(self, path_loader: PathLoader, transforms: Dict[str, Callable]):
+    def __init__(
+        self, hparams, path_loader: PathLoader, transforms: Dict[str, Callable]
+    ):
         """ Initializes the xTSDataset
         Args:
             root (string): Path to the root data directory.
             type (string): name of the txt file containing the data split
         """
-        SAMPLING_RATE = 16_000
         self.path_loader = path_loader
         self.paths = path_loader.paths
         self.transforms = transforms
         self.size = len(self.path_loader.ids)
 
         # Data loaders
-        audio_proc = AUDIO_PROCESSING[hparams.audio_processing](SAMPLING_RATE)
+        audio_proc = AUDIO_PROCESSING[hparams.audio_processing](
+            hparams.sampling_rate, hparams.n_mel_channels
+        )
         self.get_spect = compose(audio_proc.audio_to_mel, audio_proc.load_audio)
         self.get_video = get_video_lips
 
