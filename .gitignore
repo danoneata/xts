@@ -1,0 +1,10 @@
+data/*
+output/*
+tmp/*
+
+notebooks/*html
+notebooks/.ipynb_checkpoints
+
+__pycache__
+*.swp
+*.swo
