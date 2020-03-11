@@ -19,8 +19,6 @@ import torch.utils.data
 import ignite.engine as engine
 import ignite.handlers
 
-from hparams import hparams
-
 from train import (
     LR_REDUCE_PARAMS,
     PATH_LOADERS,

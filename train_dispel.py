@@ -19,7 +19,7 @@ from torch.nn import functional as F
 import ignite.engine as engine
 import ignite.handlers
 
-from hparams import hparams
+from hparams import HPARAMS
 
 from train import (
     DATASET_PARAMETERS,
@@ -39,6 +39,7 @@ from train import (
     get_argument_parser,
     prepare_batch_2,
     prepare_batch_3,
+    update_namespace,
 )
 
 import src.dataset
@@ -72,6 +73,8 @@ class TemporalClassifier(nn.Module):
 
 def train(args, trial, is_train=True, study=None):
 
+    hparams = HPARAMS[args.hparams]
+
     if args.model_type in {"bjorn"}:
         Dataset = src.dataset.xTSDatasetSpeakerIdEmbedding
         def prepare_batch(batch, device, non_blocking):
@@ -86,8 +89,8 @@ def train(args, trial, is_train=True, study=None):
     train_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-train")
     valid_path_loader = PATH_LOADERS[args.dataset](ROOT, args.filelist + "-valid")
 
-    train_dataset = Dataset(train_path_loader, transforms=TRAIN_TRANSFORMS)
-    valid_dataset = Dataset(valid_path_loader, transforms=VALID_TRANSFORMS)
+    train_dataset = Dataset(hparams, train_path_loader, transforms=TRAIN_TRANSFORMS)
+    valid_dataset = Dataset(hparams, valid_path_loader, transforms=VALID_TRANSFORMS)
 
     kwargs = dict(batch_size=args.batch_size, collate_fn=collate_fn)
     train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)
@@ -97,10 +100,11 @@ def train(args, trial, is_train=True, study=None):
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
     dataset_parameters["num_speakers"] = num_speakers
 
+    hparams = update_namespace(hparams, trial.parameters)
     model_speaker = TemporalClassifier(hparams.encoder_embedding_dim, num_speakers)
-    model = MODELS[args.model_type](dataset_parameters, trial.parameters)
+    model = MODELS[args.model_type](dataset_parameters, hparams)
 
-    model_name = f"{args.dataset}_{args.filelist}_{args.model_type}_dispel"
+    model_name = f"{args.dataset}_{args.filelist}_{args.hparams}_dispel"
     model_path = f"output/models/{model_name}.pth"
 
     # Initialize model from existing one.

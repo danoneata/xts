@@ -24,8 +24,6 @@ import ignite.handlers
 from ignite.metrics import Metric
 from ignite.exceptions import NotComputableError
 
-from hparams import hparams
-
 from train import (
     LR_REDUCE_PARAMS,
     PATH_LOADERS,
