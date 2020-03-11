@@ -1,10 +1,14 @@
 data/*
 output/*
 tmp/*
+www/*
+
+tacotron2
 
 notebooks/*html
 notebooks/.ipynb_checkpoints
 
 __pycache__
+.mypy_cache
 *.swp
 *.swo
