@@ -34,7 +34,9 @@ from train import (
     SpeakerInfo,
     TRAIN_TRANSFORMS,
     VALID_TRANSFORMS,
+    cache,
     collate_fn,
+    compute_mel_mean,
     link_best_model,
     get_argument_parser,
     prepare_batch_2,
@@ -45,6 +47,7 @@ from train import (
 import src.dataset
 
 
+DEVICE = "cuda"
 MAX_EPOCHS = 256
 BATCH_SIZE = 6
 
@@ -75,7 +78,7 @@ def train(args, trial, is_train=True, study=None):
 
     hparams = HPARAMS[args.hparams]
 
-    if args.model_type in {"bjorn"}:
+    if hparams.model_type in {"bjorn"}:
         Dataset = src.dataset.xTSDatasetSpeakerIdEmbedding
         def prepare_batch(batch, device, non_blocking):
             for i in range(len(batch)):
@@ -102,7 +105,16 @@ def train(args, trial, is_train=True, study=None):
 
     hparams = update_namespace(hparams, trial.parameters)
     model_speaker = TemporalClassifier(hparams.encoder_embedding_dim, num_speakers)
-    model = MODELS[args.model_type](dataset_parameters, hparams)
+    model = MODELS[hparams.model_type](dataset_parameters, hparams)
+
+    if hparams.drop_frame_rate:
+        path_mel_mean = os.path.join(
+            "output", "mel-mean", f"{args.dataset}-{args.filelist}.npz"
+        )
+        mel_mean = cache(compute_mel_mean, path_mel_mean)(train_dataset)["mel_mean"]
+        mel_mean = torch.tensor(mel_mean).float().to(DEVICE)
+        mel_mean = mel_mean.unsqueeze(0).unsqueeze(0)
+        model.decoder.mel_mean = mel_mean
 
     model_name = f"{args.dataset}_{args.filelist}_{args.hparams}_dispel"
     model_path = f"output/models/{model_name}.pth"
@@ -120,18 +132,17 @@ def train(args, trial, is_train=True, study=None):
         pred1, pred2 = pred
         return mse_loss(pred1, true) + mse_loss(pred2, true)
 
-    device = "cuda"
     λ = 0.0002
 
-    model.to(device)
-    model_speaker.to(device)
+    model.to(DEVICE)
+    model_speaker.to(DEVICE)
 
     def step(engine, batch):
         model.train()
         model_speaker.train()
 
-        x, y = prepare_batch(batch, device=device, non_blocking=True)
-        i = batch[2].to(device)
+        x, y = prepare_batch(batch, device=DEVICE, non_blocking=True)
+        i = batch[2].to(DEVICE)
 
         # Generator: generates audio and dispels speaker identity
         y_pred, z = model.forward_emb(x)
@@ -167,7 +178,7 @@ def train(args, trial, is_train=True, study=None):
     evaluator = engine.create_supervised_evaluator(
         model,
         metrics={"loss": ignite.metrics.Loss(loss_reconstruction)},
-        device=device,
+        device=DEVICE,
         prepare_batch=prepare_batch,
     )
 
