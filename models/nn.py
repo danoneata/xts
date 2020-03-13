@@ -141,7 +141,8 @@ class Sven(nn.Module):
 
     def __init__(self, dataset_params, hparams):
         super(Sven, self).__init__()
-        self.hparams = hparams
+        # copy hparams
+        self.hparams = SimpleNamespace(**vars(hparams))
         # use 3d convolution to extract features in time
         self.conv0_3d = nn.Sequential(
             nn.Conv3d(
@@ -179,12 +180,12 @@ class Sven(nn.Module):
             self.speaker_embedding = nn.Embedding(
                 num_embeddings, hparams.speaker_embedding_dim
             )
-            hparams.encoder_embedding_dim = (
+            self.hparams.encoder_embedding_dim = (
                 hparams.encoder_embedding_dim + hparams.speaker_embedding_dim
             )
         else:
             self.speaker_embedding = None
-        self.decoder = Tacotron2(hparams, dataset_params)
+        self.decoder = Tacotron2(self.hparams, dataset_params)
 
     def _encode_video(self, x):
         B, S, H, W = x.shape

@@ -198,9 +198,8 @@ def main():
 
     np.savez(dataset.get_path_emb(args.filelist), ids=ids, feats=feats)
 
-    if (
-        args.to_evaluate and args.dataset == "grid"
-    ):  # we don't have speaker information for LRW
+    # we have speaker information only for Grid
+    if args.to_evaluate and args.dataset == "grid":
         labels = [folder for _, folder in ids]
         evaluate(feats, labels)
 

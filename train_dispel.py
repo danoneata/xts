@@ -61,8 +61,7 @@ class TemporalClassifier(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
         )
         self.nn_post = nn.Sequential(
-            nn.Linear(hidden_dim, n_classes),
-            nn.LogSoftmax(dim=-1),
+            nn.Linear(hidden_dim, n_classes), nn.LogSoftmax(dim=-1),
         )
 
     def forward(self, x):
@@ -74,17 +73,38 @@ class TemporalClassifier(nn.Module):
         return p
 
 
+class LinearTemporalClassifier(nn.Module):
+    def __init__(self, input_dim, n_classes):
+        super(LinearTemporalClassifier, self).__init__()
+        self.linear = nn.Sequential(
+            nn.Linear(input_dim, n_classes), nn.LogSoftmax(dim=-1),
+        )
+
+    def forward(self, x):
+        x = x.mean(dim=1)
+        x = self.linear(x)
+        return x
+
+
+MODELS_SPEAKER = {
+    "generic": TemporalClassifier,
+    "linear": LinearTemporalClassifier,
+}
+
+
 def train(args, trial, is_train=True, study=None):
 
     hparams = HPARAMS[args.hparams]
 
     if hparams.model_type in {"bjorn"}:
         Dataset = src.dataset.xTSDatasetSpeakerIdEmbedding
+
         def prepare_batch(batch, device, non_blocking):
             for i in range(len(batch)):
                 batch[i] = batch[i].to(device)
             batch_x, batch_y, _, emb = batch
             return (batch_x, batch_y, emb), batch_y
+
     else:
         Dataset = src.dataset.xTSDatasetSpeakerId
         prepare_batch = prepare_batch_3
@@ -104,8 +124,10 @@ def train(args, trial, is_train=True, study=None):
     dataset_parameters["num_speakers"] = num_speakers
 
     hparams = update_namespace(hparams, trial.parameters)
-    model_speaker = TemporalClassifier(hparams.encoder_embedding_dim, num_speakers)
     model = MODELS[hparams.model_type](dataset_parameters, hparams)
+    model_speaker = MODELS_SPEAKER[hparams.model_speaker_type](
+        hparams.encoder_embedding_dim, num_speakers
+    )
 
     if hparams.drop_frame_rate:
         path_mel_mean = os.path.join(
@@ -148,7 +170,7 @@ def train(args, trial, is_train=True, study=None):
         y_pred, z = model.forward_emb(x)
         i_pred = model_speaker.forward(z)
 
-        entropy_s = (- i_pred.exp() * i_pred).sum(dim=1).mean()  # entropy on speakers
+        entropy_s = (-i_pred.exp() * i_pred).sum(dim=1).mean()  # entropy on speakers
         loss_r = loss_reconstruction(y_pred, y)  # reconstruction
         loss_g = loss_r - λ * entropy_s  # generator
 
@@ -163,10 +185,10 @@ def train(args, trial, is_train=True, study=None):
         optimizer_speaker.step()
 
         return {
-            'loss-generator': loss_g.item(),
-            'loss-reconstruction': loss_r.item(),
-            'loss-speaker': loss_s.item(),
-            'entropy-speaker': entropy_s,
+            "loss-generator": loss_g.item(),
+            "loss-reconstruction": loss_r.item(),
+            "loss-speaker": loss_s.item(),
+            "entropy-speaker": entropy_s,
         }
 
     trainer = engine.Engine(step)
