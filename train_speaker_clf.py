@@ -23,6 +23,7 @@ from train import (
     LR_REDUCE_PARAMS,
     PATH_LOADERS,
     ROOT,
+    link_best_model,
 )
 
 
@@ -99,6 +100,7 @@ def train(args, trial, is_train=True, study=None):
         )
 
     model_speaker = LinearTemporalClassifier(visual_embedding_dim, num_speakers)
+    model_speaker.to(device)
 
     kwargs = dict(batch_size=args.batch_size)
     train_loader = torch.utils.data.DataLoader(train_dataset, shuffle=True, **kwargs)
@@ -106,8 +108,6 @@ def train(args, trial, is_train=True, study=None):
 
     optimizer = torch.optim.Adam(model_speaker.parameters(), lr=trial.parameters["lr"])
     loss = nn.NLLLoss()
-
-    model_speaker.to(device)
 
     model_name = f"{args.dataset}_{args.filelist}_speaker-classifier"
     model_path = f"output/models/{model_name}.pth"
@@ -162,6 +162,12 @@ def train(args, trial, is_train=True, study=None):
     evaluator.add_event_handler(engine.Events.COMPLETED, early_stopping_handler)
 
     trainer.run(train_loader, max_epochs=args.max_epochs)
+
+    torch.save(model_speaker.state_dict(), model_path)
+    print("Last model @", model_path)
+
+    # model_best_path = link_best_model(model_name)
+    # print("Best model @", model_best_path)
 
     return evaluator.state.metrics["accuracy"]
 

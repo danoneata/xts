@@ -114,7 +114,7 @@ def get_argument_parser():
 
 
 def link_best_model(model_name):
-    pattern = re.compile(r"(.*)_model_[0-9]+_objective=([\-0-9.]+).pth")
+    pattern = re.compile(r"(.*)_model_.*=([\-0-9.]+).pth")
 
     def is_match(filename, model_name):
         m = pattern.search(filename)

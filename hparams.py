@@ -100,5 +100,6 @@ HPARAMS = {
         speaker_embedding_dim=32,
         drop_frame_rate=0.2,
         model_speaker_type="linear",
+        model_speaker_path="output/models/grid_multi-speaker_speaker-classifier.pth",
     ),
 }

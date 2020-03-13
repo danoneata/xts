@@ -145,6 +145,9 @@ def train(args, trial, is_train=True, study=None):
     if args.model_path is not None:
         model.load_state_dict(torch.load(args.model_path))
 
+    if hasattr(hparams, "model_speaker_path"):
+        model_speaker.load_state_dict(torch.load(hparams.model_speaker_path))
+
     optimizer = torch.optim.Adam(model.parameters(), lr=trial.parameters["lr"])  # 0.001
     optimizer_speaker = torch.optim.Adam(model_speaker.parameters(), lr=0.001)
 
