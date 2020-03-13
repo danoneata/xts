@@ -69,13 +69,23 @@ HPARAMS = {
         encoder_rnn_dropout=0.1,
         speaker_embedding_dim=32,
     ),
-    # model with drop frame rate
+    # baseline / B + drop frames
     "magnus-drop-frames": get_hparams(
         model_type="sven",
         conv3d_num_filters=128,
         conv3d_kernel_size=(5, 5, 5),
         encoder_rnn_num_layers=2,
         encoder_rnn_dropout=0.1,
+        drop_frame_rate=0.2,
+    ),
+    # speaker identity / SI + drop frames
+    "magnus-multi-speaker-drop-frames": get_hparams(
+        model_type="sven",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
         drop_frame_rate=0.2,
     ),
 }
