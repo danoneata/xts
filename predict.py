@@ -9,6 +9,7 @@ from tqdm import tqdm  # type: ignore
 
 from train import (
     DATASET_PARAMETERS,
+    HPARAMS,
     MODELS,
     ROOT,
     PATH_LOADERS,
@@ -44,7 +45,8 @@ def predict(args):
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
     dataset_parameters["num_speakers"] = num_speakers
 
-    model = MODELS[args.model_type](dataset_parameters)
+    hparams = HPARAMS[args.hparams]
+    model = MODELS[hparams.model_type](dataset_parameters, hparams)
 
     # Initialize model from existing one.
     model.load_state_dict(torch.load(args.model_path))
@@ -71,7 +73,7 @@ def predict(args):
         assert False, "Unknown speaker info"
 
     # Prepare data loader
-    dataset = Dataset(te_path_loader, transforms=VALID_TRANSFORMS)
+    dataset = Dataset(hparams, te_path_loader, transforms=VALID_TRANSFORMS)
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )

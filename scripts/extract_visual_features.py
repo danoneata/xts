@@ -24,7 +24,7 @@ from train import (
 
 from src.dataset import xTSDatasetSpeakerIdFilename  # type: ignore
 
-from hparams import hparams
+from hparams import HPARAMS
 
 
 BATCH_SIZE = 8
@@ -33,6 +33,8 @@ NON_BLOCKING = False
 
 
 def extract_visual_features(args):
+    hparams = HPARAMS[args.hparams]
+
     visual_embedding_dim = hparams.encoder_embedding_dim
     input_dim = DATASET_PARAMETERS[args.dataset]["len-inp"]
 
@@ -48,13 +50,13 @@ def extract_visual_features(args):
     dataset_parameters = DATASET_PARAMETERS[args.dataset]
     dataset_parameters["num_speakers"] = num_speakers
 
-    dataset = xTSDatasetSpeakerIdFilename(path_loader, transforms=VALID_TRANSFORMS)
+    dataset = xTSDatasetSpeakerIdFilename(hparams, path_loader, transforms=VALID_TRANSFORMS)
     prepare_batch = prepare_batch_3
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
 
-    model = MODELS[args.model_type](dataset_parameters)
+    model = MODELS[hparams.model_type](dataset_parameters, hparams)
     model.load_state_dict(torch.load(args.model_path))
     model.eval()
     model.to(DEVICE)
