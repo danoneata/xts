@@ -5,7 +5,7 @@ import sys
 import numpy as np
 import torch
 
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
 
 from train import (
     DATASET_PARAMETERS,

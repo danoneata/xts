@@ -134,9 +134,9 @@ class DeepConvTTS(AudioProcessing):
 
 
 AUDIO_PROCESSING = {
-    "deep-conv-tts": lambda *args: DeepConvTTS(*args),
+    "deep-conv-tts": lambda s, n: DeepConvTTS(s, n),
     # modules for which the sequence length is a multiple of 3 of the video sequence
     # (works for the GRID dataset and for a sampling rate of 16 kHz)
-    "tacotron-3": lambda *args: Tacotron(*args, hop_length=212),
-    "deep-conv-tts-3": lambda *args: DeepConvTTS(*args, hop_length=212),
+    "tacotron-3": lambda s, n: Tacotron(s, n, hop_length=212),
+    "deep-conv-tts-3": lambda s, n: DeepConvTTS(s, n, hop_length=212),
 }
