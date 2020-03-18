@@ -1,4 +1,10 @@
+import subprocess
+import sys
+
+
 N_WORDS = 6
+
+model_name = sys.argv[1]
 
 
 def load_data(path):
@@ -21,9 +27,9 @@ def wer(d1, d2):
     return 1 - n_correct / n_total
 
 
-# ./path.sh && cat exp_grid/chain_cleaned/tdnn1f_sp_bi/decode-grammar_unseen-k-small-test_synth-magnus-best/scoring/10.tra | utils/int2sym.pl -f 2- exp_grid/chain_cleaned/tdnn1f_sp_bi/graph-grammar/words.txt > /tmp/pred
-pred = load_data("/tmp/pred")
-true = load_data("/home/doneata/work/experiments-tedlium-r2/exp_grid/chain_cleaned/tdnn1f_sp_bi/decode-grammar_unseen-k-small-test_synth-magnus-best/scoring/test_filt.txt")
+subprocess.run(["bash", "scripts/grid/asr_predict.sh", model_name])
+pred = load_data(f"/tmp/pred-{model_name}")
+true = load_data(f"/home/doneata/work/experiments-tedlium-r2/exp_grid/chain_cleaned/tdnn1f_sp_bi/decode-grammar_unseen-k-small-test_synth-{model_name}/scoring/test_filt.txt")
 
 fmt = lambda wer: f"{100 * wer:4.1f}"
 word_wer = (wer(get_nth(true, n), get_nth(pred, n)) for n in range(N_WORDS))
