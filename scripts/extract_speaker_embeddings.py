@@ -83,8 +83,9 @@ class GridSyntheticDataset(Dataset):
         self.model_name = model_name
 
     def load_ids_and_paths(self, filelist):
-        with open(os.path.join(ROOT, "grid", "filelists", filelist + ".txt"), "r") as f:
-            ids = [line.strip() for line in f.readlines()]
+        preds_path = f"output/predictions/grid-multi-speaker-{filelist}-{self.model_name}.npz"
+        data = np.load(preds_path)
+        ids = data["ids"].tolist()
 
         def get_path(id1):
             file_, folder = id1.split()
@@ -111,7 +112,7 @@ def get_arg_parser():
     parser = argparse.ArgumentParser()
 
     # fmt: off
-    parser.add_argument("--dataset", choices=DATASETS, required=True, help="dataset to extract embeddings on")
+    parser.add_argument("--dataset", required=True, help="dataset to extract embeddings on")
     parser.add_argument("--to-evaluate", action="store_true", help="EER evaluation")
 
     # set up training configuration.
@@ -177,22 +178,26 @@ def evaluate(feats, labels, num_pairs=10_000):
     print("EER: {:.3f}%".format(eer))
 
 
-TR_SPEAKERS = "s1 s10 s12 s14 s15 s17 s22 s26 s28 s3 s32 s5 s6 s7".split()
+# TR_SPEAKERS = "s1 s10 s12 s14 s15 s17 s22 s26 s28 s3 s32 s5 s6 s7".split()
 DATASETS = {
     "grid": lambda: GridDataset(),
     "lrw": lambda: LRWDataset(),
 }
 
-for s in TR_SPEAKERS:
-    key = f"magnus-multi-speaker-best-emb-spk-{s}"
-    DATASETS[f"synth:{key}"] = lambda key=key: GridSyntheticDataset(key)
+# for s in TR_SPEAKERS:
+#    key = f"magnus-multi-speaker-best-emb-spk-{s}"
+#    DATASETS[f"synth:{key}"] = lambda key=key: GridSyntheticDataset(key)
 
 
 def main():
     parser = get_arg_parser()
     args = parser.parse_args()
 
-    dataset = DATASETS[args.dataset]()
+    if args.dataset.startswith("synth:"):
+        _, key = args.dataset.split(":")
+        dataset = GridSyntheticDataset(key)
+    else:
+        dataset = DATASETS[args.dataset]()
     ids, paths = dataset.load_ids_and_paths(args.filelist)
     feats = extract_features(paths, args)
 

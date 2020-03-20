@@ -78,15 +78,14 @@ def predict(args):
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
 
-    n_samples = len(dataset)
-    t = DATASET_PARAMETERS[args.dataset]["len-out"]
-    n_mel_channels = 80
-    preds = np.zeros((n_samples, t, n_mel_channels))
+    get_ids = lambda: te_path_loader.ids
 
     if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
+        n_target = 1
         emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
         predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
     elif model.speaker_info is SpeakerInfo.EMBEDDING and args.embedding == "mean":
+        n_target = 1
         data_embedding = np.load(tr_path_loader.paths["speaker-embeddings"][0])
         speaker_embeddings = torch.tensor(data_embedding["feats"]).float()
         emb = speaker_embeddings.mean(dim=0, keepdim=True).to(DEVICE)
@@ -96,11 +95,38 @@ def predict(args):
         and args.embedding
         and args.embedding.startswith("spk")
     ):
+        n_target = 1
         _, speaker = args.embedding.split("-")
         id1 = tr_path_loader.speaker_to_id[speaker]
         emb = model.speaker_embedding.weight[id1]
         predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    if model.speaker_info is SpeakerInfo.ID and args.embedding == "all-speakers":
+        n_target = num_speakers
+        get_i = lambda s, n: torch.zeros(n).long().to(DEVICE) + s
+        id_to_speaker = {i: s for s, i in tr_path_loader.speaker_to_id.items()}
+
+        def update_id(id_, spk_id_tgt):
+            utt_id, spk_src = id_.split()
+            spk_tgt = id_to_speaker[spk_id_tgt]
+            return f"{utt_id}-{spk_tgt} {spk_src}"
+
+        def get_ids():
+            return [
+                update_id(id_, tgt)
+                for id_ in te_path_loader.ids
+                for tgt in range(num_speakers)
+            ]
+
+        def predict1(model, inp):
+            x, _ = inp
+            preds = [model.predict((x, get_i(s, len(x)))) for s in range(num_speakers)]
+            preds = torch.stack(preds).transpose(0, 1)
+            _, _, T, D = preds.shape
+            preds = preds.reshape(-1, T, D)
+            return preds
+
     else:
+        n_target = 1
         if model.speaker_info is SpeakerInfo.ID:
             # check that speakers agree
             get_speakers = lambda p: sorted(p.speaker_to_id.keys())
@@ -111,13 +137,20 @@ def predict(args):
             assert False
         predict1 = lambda model, inp: model.predict(inp)
 
+    n_samples = len(dataset)
+    t = DATASET_PARAMETERS[args.dataset]["len-out"]
+    n_mel_channels = 80
+    preds = np.zeros((n_samples * n_target, t, n_mel_channels))
+
     with torch.no_grad():
         for b, batch in enumerate(tqdm(loader)):
             (x, _, extra), _ = prepare_batch(batch, DEVICE, NON_BLOCKING)
             p = predict1(model, (x, extra))
-            preds[b * BATCH_SIZE : (b + 1) * BATCH_SIZE] = p.cpu().numpy()
+            α = BATCH_SIZE * n_target * b
+            ω = BATCH_SIZE * n_target * (b + 1)
+            preds[α:ω] = p.cpu().numpy()
 
-    ids = te_path_loader.ids
+    ids = get_ids()
     filenames = [te_path_loader.id_to_filename(i, "audio") for i in ids]
     np.savez(args.output_path, ids=ids, filenames=filenames, preds=preds)
 
