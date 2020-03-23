@@ -7,7 +7,7 @@ preds_name=grid-multi-speaker-unseen-k-tiny-test-${model_long}
 python predict.py \
     --hparams ${model_short} \
     -d grid \
-    --model-path output/models/grid_multi-speaker_magnus-multi-speaker-drop-frames-linear-speaker_dispel_best.pth \
+    --model-path output/models/grid_multi-speaker_${model}_best.pth \
     --filelist unseen-k-tiny \
     --filelist-train multi-speaker \
     --embedding all-speakers \
@@ -16,7 +16,7 @@ python predict.py \
 
 # WAVs
 P=/home/doneata/work/xts/output/predictions
-cd ~/work/dc-tts-xts && venv/bin/python synthesize_spectro.py ${P}/${preds_name}.npz
+cd ~/work/dc-tts-xts && venv/bin/python synthesize_spectro.py ${P}/${preds_name}.npz && cd -
 
 # Speaker embeddings
 ~/src/vgg-speaker-recognition/venv/bin/python scripts/extract_speaker_embeddings.py \
