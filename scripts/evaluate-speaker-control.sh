@@ -1,6 +1,9 @@
-model=magnus-multi-speaker-drop-frames-linear-speaker-dispel
-model_short=${m%%_dispel}
-model_long=${model}-best-emb-all-speakers
+set -e
+
+model=$1  # e.g. magnus-multi-speaker-drop-frames-linear-speaker_dispel
+model_short=${model%%_dispel}
+model_short=${model_short%%_revgrad}
+model_long=${model/_/-}-best-emb-all-speakers
 preds_name=grid-multi-speaker-unseen-k-tiny-test-${model_long}
 
 # Mel-spectrograms
