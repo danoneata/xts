@@ -78,31 +78,8 @@ def predict(args):
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
 
-    get_ids = lambda: te_path_loader.ids
-
-    if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
-        n_target = 1
-        emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
-        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
-    elif model.speaker_info is SpeakerInfo.EMBEDDING and args.embedding == "mean":
-        n_target = 1
-        data_embedding = np.load(tr_path_loader.paths["speaker-embeddings"][0])
-        speaker_embeddings = torch.tensor(data_embedding["feats"]).float()
-        emb = speaker_embeddings.mean(dim=0, keepdim=True).to(DEVICE)
-        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
-    elif (
-        model.speaker_info is SpeakerInfo.ID
-        and args.embedding
-        and args.embedding.startswith("spk")
-    ):
-        n_target = 1
-        _, speaker = args.embedding.split("-")
-        id1 = tr_path_loader.speaker_to_id[speaker]
-        emb = model.speaker_embedding.weight[id1]
-        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
-    if model.speaker_info is SpeakerInfo.ID and args.embedding == "all-speakers":
+    if args.embedding == "all-speakers":
         n_target = num_speakers
-        get_i = lambda s, n: torch.zeros(n).long().to(DEVICE) + s
         id_to_speaker = {i: s for s, i in tr_path_loader.speaker_to_id.items()}
 
         def update_id(id_, spk_id_tgt):
@@ -117,6 +94,30 @@ def predict(args):
                 for tgt in range(num_speakers)
             ]
 
+    else:
+        n_target = 1
+        get_ids = lambda: te_path_loader.ids
+
+    if model.speaker_info is SpeakerInfo.ID and args.embedding == "mean":
+        emb = model.speaker_embedding.weight.mean(dim=0, keepdim=True)
+        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    elif model.speaker_info is SpeakerInfo.EMBEDDING and args.embedding == "mean":
+        data_embedding = np.load(tr_path_loader.paths["speaker-embeddings"][0])
+        speaker_embeddings = torch.tensor(data_embedding["feats"]).float()
+        emb = speaker_embeddings.mean(dim=0, keepdim=True).to(DEVICE)
+        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    elif (
+        model.speaker_info is SpeakerInfo.ID
+        and args.embedding
+        and args.embedding.startswith("spk")
+    ):
+        _, speaker = args.embedding.split("-")
+        id1 = tr_path_loader.speaker_to_id[speaker]
+        emb = model.speaker_embedding.weight[id1]
+        predict1 = lambda model, inp: predict_emb(model, inp, emb.repeat(x.shape[0], 1))
+    elif model.speaker_info is SpeakerInfo.ID and args.embedding == "all-speakers":
+        get_i = lambda s, n: torch.zeros(n).long().to(DEVICE) + s
+
         def predict1(model, inp):
             x, _ = inp
             preds = [model.predict((x, get_i(s, len(x)))) for s in range(num_speakers)]
@@ -125,6 +126,32 @@ def predict(args):
             preds = preds.reshape(-1, T, D)
             return preds
 
+    elif (
+        model.speaker_info is SpeakerInfo.EMBEDDING and args.embedding == "all-speakers"
+    ):
+        data_embedding = np.load(tr_path_loader.paths["speaker-embeddings"][0])
+        embeddings = data_embedding["feats"]
+        speakers = [utt_id.split()[1] for utt_id in data_embedding["ids"].tolist()]
+        embeddings_speaker = np.zeros((num_speakers, embeddings.shape[1]))
+        for speaker in set(speakers):
+            i = tr_path_loader.speaker_to_id[speaker]
+            idxs = [speaker == t for t in speakers]
+            embeddings_speaker[i] = np.mean(embeddings[idxs], axis=0)
+        embeddings_speaker = torch.tensor(embeddings_speaker).float().to(DEVICE)
+
+        def get_embedding(s, n):
+            return embeddings_speaker[s].unsqueeze(0).repeat(n, 1)
+
+        def predict1(model, inp):
+            x, _ = inp
+            preds = [
+                predict_emb(model, inp, get_embedding(s, len(x)))
+                for s in range(num_speakers)
+            ]
+            preds = torch.stack(preds).transpose(0, 1)
+            _, _, T, D = preds.shape
+            preds = preds.reshape(-1, T, D)
+            return preds
     else:
         n_target = 1
         if model.speaker_info is SpeakerInfo.ID:
