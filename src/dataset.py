@@ -252,6 +252,32 @@ class xTSDatasetSpeakerEmbedding(xTSDataset):
         return video, spect, embedding
 
 
+class xTSDatasetSpeakerFixedEmbedding(xTSDataset):
+    def __init__(self, *args, **kwargs):
+        super(xTSDatasetSpeakerFixedEmbedding, self).__init__(*args, **kwargs)
+        data_embedding = np.load(self.paths["speaker-embeddings"][0])
+        self.speaker_embeddings = self._get_speaker_fixed_embeddings(
+            data_embedding["feats"], data_embedding["ids"]
+        )
+
+    def _get_speaker_fixed_embeddings(self, features, ids):
+        speakers = [utt_id.split()[1] for utt_id in ids.tolist()]
+        num_speakers = len(set(speakers))
+        embeddings_speaker = np.zeros((num_speakers, features.shape[1]))
+        for speaker in set(speakers):
+            i = self.path_loader.speaker_to_id[speaker]
+            idxs = [speaker == t for t in speakers]
+            embeddings_speaker[i] = np.mean(features[idxs], axis=0)
+        return embeddings_speaker
+
+    def __getitem__(self, idx: int):
+        video, spect = super(xTSDatasetSpeakerFixedEmbedding, self).__getitem__(idx)
+        id_ = self.path_loader.speaker_to_id[self.path_loader.speakers[idx]]
+        embedding = self.speaker_embeddings[id_]
+        embedding = torch.tensor(embedding).float()
+        return video, spect, embedding
+
+
 class xTSDatasetSpeakerIdEmbedding(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerIdEmbedding, self).__init__(*args, **kwargs)

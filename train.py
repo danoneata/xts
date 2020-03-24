@@ -196,7 +196,10 @@ def train(args, trial, is_train=True, study=None):
         Dataset = src.dataset.xTSDatasetSpeakerId
         prepare_batch = prepare_batch_3
     elif model.speaker_info is SpeakerInfo.EMBEDDING:
-        Dataset = src.dataset.xTSDatasetSpeakerEmbedding
+        if hparams.use_fixed_embeddings:
+            Dataset = src.dataset.xTSDatasetSpeakerFixedEmbedding
+        else:
+            Dataset = src.dataset.xTSDatasetSpeakerEmbedding
         prepare_batch = prepare_batch_3
     else:
         assert False, "Unknown speaker info"
