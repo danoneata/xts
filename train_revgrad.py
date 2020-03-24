@@ -87,6 +87,7 @@ class TemporalClassifier(nn.Module):
     def __init__(self, input_dim, n_classes, hidden_dim=64):
         super(TemporalClassifier, self).__init__()
         self.nn_pre = nn.Sequential(
+            GradientReversal(),
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, hidden_dim),
@@ -108,7 +109,7 @@ class LinearTemporalClassifier(nn.Module):
     def __init__(self, input_dim, n_classes):
         super(LinearTemporalClassifier, self).__init__()
         self.linear = nn.Sequential(
-            nn.Linear(input_dim, n_classes), nn.LogSoftmax(dim=-1),
+            GradientReversal(), nn.Linear(input_dim, n_classes), nn.LogSoftmax(dim=-1),
         )
 
     def forward(self, x):
