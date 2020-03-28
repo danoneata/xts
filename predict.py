@@ -49,6 +49,15 @@ def predict(args):
     model = MODELS[hparams.model_type](dataset_parameters, hparams)
 
     # Initialize model from existing one.
+    # from collections import OrderedDict
+    # def updatek(k):
+    #     if k.startswith('conv0') or k.startswith('encoder'):
+    #         return 'video_encoder.' + k
+    #     else:
+    #         return k
+    # def rename_state_dict(s):
+    #     return OrderedDict((updatek(k), v) for k, v in s.items())
+    # model.load_state_dict(rename_state_dict(torch.load(args.model_path)))
     model.load_state_dict(torch.load(args.model_path))
     model.eval()
 

@@ -255,3 +255,51 @@ class Sven(nn.Module):
         x = self.encode(x, ids)
         _, y = self.decoder.predict2(x, y)
         return y
+
+
+class Sven2(nn.Module):
+    """Cleaned up implementation of Sven2"""
+
+    speaker_info = SpeakerInfo.ID
+
+    def __init__(self, dataset_params, hparams):
+        super(Sven2, self).__init__()
+        assert hparams.speaker_embedding_dim is not None
+        E_DIM_IN = 512
+        E_DIM_OUT = hparams.speaker_embedding_dim
+        hparams_copy = SimpleNamespace(**vars(hparams))
+        hparams_copy.encoder_embedding_dim += E_DIM_OUT
+        self.video_encoder = VideoEncoder(hparams)
+        self.speaker_embedding = nn.Embedding(
+            dataset_params["num_speakers"], hparams.speaker_embedding_dim
+        )
+        self.decoder = Tacotron2(hparams_copy, dataset_params)
+
+    def _concat_embedding(self, x, e):
+        _, S, _ = x.shape
+        e = e.unsqueeze(1)
+        e = e.repeat(1, S, 1)
+        x = torch.cat((x, e), dim=2)
+        return x
+
+    def _encode_video(self, x):
+        return self.video_encoder(x)
+
+    def forward(self, inp):
+        x, y, ids = inp
+        x = self.video_encoder(x)
+        x = self._concat_embedding(x, self.speaker_embedding(ids))
+        return self.decoder(x, y)
+
+    def forward_emb(self, inp):
+        x, y, ids = inp
+        z = self.video_encoder(x)
+        s = self._concat_embedding(z, self.speaker_embedding(ids))
+        return self.decoder(s, y), z
+
+    def predict(self, inp):
+        x, ids = inp
+        x = self.video_encoder(x)
+        x = self._concat_embedding(x, self.speaker_embedding(ids))
+        _, y = self.decoder.predict(x)
+        return y
