@@ -235,11 +235,21 @@ class xTSDatasetSpeakerIdFilename(xTSDataset):
         return video, spect, id_, self.path_loader.ids[idx]
 
 
+def get_embedding_stats(emb):
+    emb = torch.tensor(emb).float()
+    ε = 1e-7 * torch.ones(1, emb.shape[1])
+    return {
+        "μ": emb.mean(dim=0, keepdim=True),
+        "σ": torch.max(emb.var(dim=0, keepdim=True).sqrt(), ε) / 3,
+    }
+
+
 class xTSDatasetSpeakerEmbedding(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerEmbedding, self).__init__(*args, **kwargs)
         data_embedding = np.load(self.paths["speaker-embeddings"][0])
         self.speaker_embeddings = data_embedding["feats"]
+        self.embedding_stats = get_embedding_stats(data_embedding["feats"])
         self.id_to_index = {
             id1: index for index, id1 in enumerate(data_embedding["ids"])
         }
@@ -256,9 +266,18 @@ class xTSDatasetSpeakerFixedEmbedding(xTSDataset):
     def __init__(self, *args, **kwargs):
         super(xTSDatasetSpeakerFixedEmbedding, self).__init__(*args, **kwargs)
         data_embedding = np.load(self.paths["speaker-embeddings"][0])
+        self.embedding_stats = get_embedding_stats(data_embedding["feats"])
         self.speaker_embeddings = self._get_speaker_fixed_embeddings(
             data_embedding["feats"], data_embedding["ids"]
         )
+
+    def _get_embedding_stats(self, features):
+        emb = torch.tensor(emb).float()
+        ε = 1e-7 * torch.ones(1, emb.shape[1])
+        return {
+            "μ": emb.mean(0, keepdim=True),
+            "σ": torch.max(emb.var(0, keepdim=True).sqrt(), ε) / 3,
+        }
 
     def _get_speaker_fixed_embeddings(self, features, ids):
         speakers = [utt_id.split()[1] for utt_id in ids.tolist()]

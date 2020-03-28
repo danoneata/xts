@@ -102,9 +102,14 @@ class Bjorn(nn.Module):
         self.video_encoder = VideoEncoder(hparams)
         self.linear = nn.Linear(E_DIM_IN, E_DIM_OUT)
         self.decoder = Tacotron2(hparams_copy, dataset_params)
+        self.embedding_stats = {"μ": None, "σ": None}
+
+    def _normalize_emb(self, e):
+        return (e - self.embedding_stats["μ"].to(e.device)) / self.embedding_stats["σ"].to(e.device)
 
     def _concat_embedding(self, x, e):
         _, S, _ = x.shape
+        e = self._normalize_emb(e)
         e = self.linear(e)
         e = e.unsqueeze(1)
         e = e.repeat(1, S, 1)
