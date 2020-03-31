@@ -276,7 +276,7 @@ class xTSDatasetSpeakerFixedEmbedding(xTSDataset):
         ε = 1e-7 * torch.ones(1, emb.shape[1])
         return {
             "μ": emb.mean(0, keepdim=True),
-            "σ": torch.max(emb.var(0, keepdim=True).sqrt(), ε) / 3,
+            "σ": torch.max(emb.var(0, keepdim=True).sqrt(), ε),
         }
 
     def _get_speaker_fixed_embeddings(self, features, ids):
