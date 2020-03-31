@@ -87,7 +87,7 @@ def predict(args):
         dataset, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False
     )
 
-    if model.speaker_info is SpeakerInfo.EMBEDDING:
+    if model.speaker_info is SpeakerInfo.EMBEDDING and hparams.embedding_normalize:
         tr_dataset = src.dataset.xTSDatasetSpeakerEmbedding(hparams, tr_path_loader, transforms=VALID_TRANSFORMS)
         model.embedding_stats = tr_dataset.embedding_stats
 

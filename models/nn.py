@@ -105,7 +105,10 @@ class Bjorn(nn.Module):
         self.embedding_stats = {"μ": None, "σ": None}
 
     def _normalize_emb(self, e):
-        return (e - self.embedding_stats["μ"].to(e.device)) / self.embedding_stats["σ"].to(e.device)
+        if self.embedding_stats["μ"] is not None and self.embedding_stats["σ"] is not None:
+            return (e - self.embedding_stats["μ"].to(e.device)) / self.embedding_stats["σ"].to(e.device)
+        else:
+            return e
 
     def _concat_embedding(self, x, e):
         _, S, _ = x.shape

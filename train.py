@@ -207,7 +207,7 @@ def train(args, trial, is_train=True, study=None):
     train_dataset = Dataset(hparams, train_path_loader, transforms=TRAIN_TRANSFORMS)
     valid_dataset = Dataset(hparams, valid_path_loader, transforms=VALID_TRANSFORMS)
 
-    if model.speaker_info is SpeakerInfo.EMBEDDING:
+    if model.speaker_info is SpeakerInfo.EMBEDDING and hparams.embedding_normalize:
         model.embedding_stats = train_dataset.embedding_stats
 
     if hparams.drop_frame_rate:

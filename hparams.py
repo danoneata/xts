@@ -18,6 +18,7 @@ def get_hparams(**kwargs):
         encoder_embedding_dim=512,
         # Speaker information
         speaker_embedding_dim=None,
+        embedding_normalize=False,
         # Decoder parameters
         n_frames_per_step=1,  # currently only 1 is supported
         decoder_rnn_dim=1024,
@@ -115,6 +116,31 @@ HPARAMS = {
         model_speaker_type="generic",
         use_fixed_embeddings=False,
     ),
+    # speaker embedding / SE norm
+    "bjorn-norm": get_hparams(
+        model_type="bjorn",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
+        model_speaker_type="generic",
+        use_fixed_embeddings=False,
+        embedding_normalize=True,
+    ),
+    # speaker embedding / SE norm + drop frames
+    "bjorn-norm-drop-frames": get_hparams(
+        model_type="bjorn",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
+        drop_frame_rate=0.2,
+        model_speaker_type="generic",
+        use_fixed_embeddings=False,
+        embedding_normalize=True,
+    ),
     # speaker embedding / SE + drop frames + linear speaker
     "bjorn-drop-frames-linear-speaker": get_hparams(
         model_type="bjorn",
@@ -130,6 +156,16 @@ HPARAMS = {
         use_fixed_embeddings=False,
     ),
     "bjorn-fixed-emb": get_hparams(
+        model_type="bjorn",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
+        model_speaker_type="generic",
+        use_fixed_embeddings=True,
+    ),
+    "bjorn-norm-fixed-emb": get_hparams(
         model_type="bjorn",
         conv3d_num_filters=128,
         conv3d_kernel_size=(5, 5, 5),
