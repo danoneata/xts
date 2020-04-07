@@ -47,7 +47,7 @@ from my_utils import cache
 
 ROOT = os.environ.get("ROOT", "data")
 CHECKPOINTS_DIR = "output/models/checkpoints"
-DEVICE = "cuda"
+DEVICE = os.environ.get("CUDA_DEVICE", "cuda")
 
 
 SEED = 1337
