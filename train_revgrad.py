@@ -175,7 +175,7 @@ def train(args, trial, is_train=True, study=None):
 
     # Initialize model from existing one.
     if args.model_path is not None:
-        model.load_state_dict(torch.load(args.model_path))
+        model.load_state_dict(torch.load(args.model_path, map_location=DEVICE))
 
     # if hasattr(hparams, "model_speaker_path"):
     #     model_speaker.load_state_dict(torch.load(hparams.model_speaker_path))

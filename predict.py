@@ -58,7 +58,7 @@ def predict(args):
     # def rename_state_dict(s):
     #     return OrderedDict((updatek(k), v) for k, v in s.items())
     # model.load_state_dict(rename_state_dict(torch.load(args.model_path)))
-    model.load_state_dict(torch.load(args.model_path))
+    model.load_state_dict(torch.load(args.model_path, map_location=DEVICE))
     model.eval()
 
     if DEVICE == "cuda":
