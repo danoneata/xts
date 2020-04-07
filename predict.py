@@ -9,6 +9,7 @@ from tqdm import tqdm  # type: ignore
 
 from train import (
     DATASET_PARAMETERS,
+    DEVICE,
     HPARAMS,
     MODELS,
     ROOT,
@@ -24,7 +25,6 @@ import src.dataset
 
 
 BATCH_SIZE = 8
-DEVICE = "cuda"
 NON_BLOCKING = False
 
 

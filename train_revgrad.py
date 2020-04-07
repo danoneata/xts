@@ -24,6 +24,7 @@ from hparams import HPARAMS
 
 from train import (
     DATASET_PARAMETERS,
+    DEVICE,
     EVERY_K_ITERS,
     IMAGE_TRANSFORM,
     LR_REDUCE_PARAMS,
@@ -48,7 +49,6 @@ from train import (
 import src.dataset
 
 
-DEVICE = "cuda"
 MAX_EPOCHS = 256
 BATCH_SIZE = 6
 
