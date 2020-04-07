@@ -141,6 +141,19 @@ HPARAMS = {
         use_fixed_embeddings=False,
         embedding_normalize=True,
     ),
+    # speaker embedding / SE norm + drop frames + linear speaker
+    "bjorn-norm-drop-frames-linear-speaker": get_hparams(
+        model_type="bjorn",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
+        drop_frame_rate=0.2,
+        model_speaker_type="linear",
+        use_fixed_embeddings=False,
+        embedding_normalize=True,
+    ),
     # speaker embedding / SE + drop frames + linear speaker
     "bjorn-drop-frames-linear-speaker": get_hparams(
         model_type="bjorn",
