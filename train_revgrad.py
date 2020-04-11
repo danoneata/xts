@@ -161,6 +161,9 @@ def train(args, trial, is_train=True, study=None):
         hparams.encoder_embedding_dim, num_speakers
     )
 
+    if model.speaker_info is SpeakerInfo.EMBEDDING and hparams.embedding_normalize:
+        model.embedding_stats = train_dataset.embedding_stats
+
     if hparams.drop_frame_rate:
         path_mel_mean = os.path.join(
             "output", "mel-mean", f"{args.dataset}-{args.filelist}.npz"

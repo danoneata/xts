@@ -294,6 +294,7 @@ class xTSDatasetSpeakerIdEmbedding(xTSDataset):
         super(xTSDatasetSpeakerIdEmbedding, self).__init__(*args, **kwargs)
         data_embedding = np.load(self.paths["speaker-embeddings"][0])
         self.speaker_embeddings = data_embedding["feats"]
+        self.embedding_stats = get_embedding_stats(data_embedding["feats"])
         self.id_to_index = {
             id1: index for index, id1 in enumerate(data_embedding["ids"])
         }
