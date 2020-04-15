@@ -95,6 +95,7 @@ MODELS_SPEAKER = {
 def train(args, trial, is_train=True, study=None):
 
     hparams = HPARAMS[args.hparams]
+    print(hparams)
 
     if hparams.model_type in {"bjorn"}:
         Dataset = src.dataset.xTSDatasetSpeakerIdEmbedding
@@ -160,7 +161,10 @@ def train(args, trial, is_train=True, study=None):
         pred1, pred2 = pred
         return mse_loss(pred1, true) + mse_loss(pred2, true)
 
-    λ = 0.0002
+    if hasattr(hparams, "loss_speaker_weight"):
+        λ = hparams.loss_speaker_weight
+    else:
+        λ = 0.0002
 
     model.to(DEVICE)
     model_speaker.to(DEVICE)

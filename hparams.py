@@ -198,3 +198,18 @@ HPARAMS = {
         speaker_embedding_dim=32,
     ),
 }
+
+for δ in [0.1, 0.2, 0.4]:
+    for λ in [-5, -4, -3]:
+        HPARAMS[f"bjorn-drop-frames-{δ}-linear-speaker-{λ}"] = get_hparams(
+            model_type="bjorn",
+            conv3d_num_filters=128,
+            conv3d_kernel_size=(5, 5, 5),
+            encoder_rnn_num_layers=2,
+            encoder_rnn_dropout=0.1,
+            speaker_embedding_dim=32,
+            drop_frame_rate=δ,
+            use_fixed_embeddings=False,
+            model_speaker_type="linear",
+            loss_speaker_weight=2 * 10 ** λ,
+        )
