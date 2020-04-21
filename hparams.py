@@ -104,6 +104,17 @@ HPARAMS = {
         model_speaker_type="linear",
         model_speaker_path="output/models/grid_multi-speaker_speaker-classifier.pth",
     ),
+    # as above, but the speaker model is trained from scratch (no-init)
+    "magnus-multi-speaker-drop-frames-linear-speaker-no-init": get_hparams(
+        model_type="sven",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
+        drop_frame_rate=0.2,
+        model_speaker_type="linear",
+    ),
     # speaker embedding / SE + drop frames
     "bjorn-drop-frames": get_hparams(
         model_type="bjorn",
@@ -199,7 +210,6 @@ HPARAMS = {
         model_speaker_type="linear",
         use_fixed_embeddings=True,
     ),
-
     # speaker identity / SI
     "magnus-multi-speaker-2": get_hparams(
         model_type="sven-2",
