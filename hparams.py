@@ -188,6 +188,18 @@ HPARAMS = {
         model_speaker_type="generic",
         use_fixed_embeddings=True,
     ),
+    "bjorn-norm-fixed-emb-drop-frames-linear-speaker": get_hparams(
+        model_type="bjorn",
+        conv3d_num_filters=128,
+        conv3d_kernel_size=(5, 5, 5),
+        encoder_rnn_num_layers=2,
+        encoder_rnn_dropout=0.1,
+        speaker_embedding_dim=32,
+        drop_frame_rate=0.2,
+        model_speaker_type="linear",
+        use_fixed_embeddings=True,
+    ),
+
     # speaker identity / SI
     "magnus-multi-speaker-2": get_hparams(
         model_type="sven-2",
