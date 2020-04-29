@@ -1,9 +1,11 @@
+import os
 import subprocess
 import sys
 
 
 N_WORDS = 6
 
+dataset = os.environ.get("DATA", "unseen-k-small-test")
 model_name = sys.argv[1]
 
 
@@ -27,9 +29,10 @@ def wer(d1, d2):
     return 1 - n_correct / n_total
 
 
-subprocess.run(["bash", "scripts/grid/asr_predict.sh", model_name])
-pred = load_data(f"/tmp/pred-{model_name}")
-true = load_data(f"/home/doneata/work/experiments-tedlium-r2/exp_grid/chain_cleaned/tdnn1f_sp_bi/decode-grammar_unseen-k-small-test_synth-{model_name}/scoring/test_filt.txt")
+key = f"{dataset}_synth-{model_name}"
+subprocess.run(["bash", "scripts/grid/asr_predict.sh", key])
+pred = load_data(f"/tmp/pred-{key}")
+true = load_data(f"/home/doneata/work/experiments-tedlium-r2/exp_grid/chain_cleaned/tdnn1f_sp_bi/decode-grammar_{key}/scoring/test_filt.txt")
 
 fmt = lambda wer: f"{100 * wer:4.1f}"
 
