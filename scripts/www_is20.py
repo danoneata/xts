@@ -5,11 +5,14 @@ import random
 import shutil
 import subprocess
 
+from itertools import groupby
+
 import dominate
 
 from dominate import tags
+from dominate.util import raw
 
-from toolz import partition
+from toolz import compose, first, partition_all, second
 
 
 SEED = 1337
@@ -21,6 +24,9 @@ AUDIO_PATH = "data/grid/audio-from-video"
 
 FACE_PATH = "data/grid/face-landmarks"
 OUT_PATH = "output/www/is20"
+
+
+TARGET_SPEAKERS = "s1 s3 s5 s6 s7 s10 s12 s14 s15 s17 s22 s26 s28 s32".split()
 
 
 def load_text():
@@ -83,9 +89,11 @@ def get_video_path(id_, speaker):
     return os.path.join(folder_dst, file_dst)
 
 
-def get_audio_path(id_, speaker, method):
+def get_audio_path(id_, speaker, method, filelist=None):
     METHOD_TO_FOLDER_SRC = {
         "ours-baseline": "output/synth-samples/grid-k-seen-test-magnus-best",
+        "ours-speaker-identity-dispel": f"output/synth-samples/grid-multi-speaker-{filelist}-magnus-multi-speaker-drop-frames-linear-speaker-dispel-best-emb-all-speakers",
+        "ours-speaker-embedding-dispel": f"output/synth-samples/grid-multi-speaker-{filelist}-bjorn-drop-frames-linear-speaker-dispel-best-emb-all-speakers",
         "theirs": "data/grid/samples-konstantinos/seen",
     }
 
@@ -105,6 +113,9 @@ def get_audio_path(id_, speaker, method):
     return os.path.join(folder_dst, file_dst)
 
 
+get_speaker_id = lambda s: int(s[1:])
+
+
 def load_results_1(num_results=12):
     text = load_text()
 
@@ -115,7 +126,6 @@ def load_results_1(num_results=12):
             "speaker": speaker,
             "sample-id": id_,
             "video-path": get_video_path(id_, speaker),
-            "audio-path-orig": None,
             "audio-path-theirs": get_audio_path(id_, speaker, "theirs"),
             "audio-path-ours": get_audio_path(id_, speaker, "ours-baseline"),
         }
@@ -126,11 +136,35 @@ def load_results_1(num_results=12):
     return [load_result(*i) for i in selected_ids]
 
 
+def load_results_2(filelist, method):
+    text = load_text()
+
+    ids = load_filelist(os.path.join("data/grid/filelists", filelist + ".txt"))
+    # Pick first sample from each audio
+    selected_ids = [first(g) for _, g in groupby(ids, key=lambda t: t[1])]
+    selected_ids = sorted(selected_ids, key=compose(get_speaker_id, second))
+    # random.shuffle(ids)
+    # selected_ids = sorted(ids[:num_results], key=lambda t: int(t[1][1:]))
+
+    def load_result(id_, speaker):
+        audio_orig_src = os.path.join(AUDIO_PATH, speaker, id_ + ".jpg")
+        return {
+            "text": text[id_],
+            "speaker": speaker,
+            "sample-id": id_,
+            "video-path": get_video_path(id_, speaker),
+            "audio-paths-ours": [
+                (target, get_audio_path(f"{id_}-{target}", speaker, method, filelist))
+                for target in TARGET_SPEAKERS
+            ],
+        }
+
+    return [load_result(*i) for i in selected_ids]
+
+
 doc = dominate.document(title="Speaker disentanglement in video-to-speech conversion")
 
 with doc.head:
-    # tags.link(rel="stylesheet", href="static/style.css")
-    # tags.script(type="text/javascript", src="script.js")
     # jQuery
     tags.script(
         type="text/javascript", src="https://code.jquery.com/jquery-3.5.1.min.js",
@@ -142,8 +176,16 @@ with doc.head:
     )
     tags.script(
         type="text/javascript",
+        src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js",
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo",
+        crossorigin="anonymous",
+    )
+    tags.script(
+        type="text/javascript",
         src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js",
     )
+    # My scripts
+    # tags.link(rel="stylesheet", href="static/style.css")
 
 
 # fmt: off
@@ -160,12 +202,12 @@ with doc:
             with tags.ul():
 
                 with tags.li():
-                    tags.a("video-to-speech", href="#video-to-speech.html")
+                    tags.a("video-to-speech", href="#video-to-speech")
                     tags.span("in which we evaluate our baseline system with respect to the previous work;")
 
                 with tags.li():
-                    tags.a("speaker control", href="#speaker-control.html")
-                    tags.span("in which we evaluate a speaker-dependent model to generate audio in a new voice.")
+                    tags.a("speaker control", href="#speaker-control")
+                    tags.span("in which we evaluate a speaker-dependent model to generate audio in a target voice.")
 
             tags.p("Our code is available here.")
             tags.span("Note: If you are having trouble playing the videos below, please consider using the Chrome browser.", cls="text-muted")
@@ -177,8 +219,8 @@ with doc:
                 "We show the lip crops, similar to the input of our network (although the network gets grayscale videos)."
             )
 
-            data = load_results_1()
-            for row in partition(6, data):
+            data1 = load_results_1()
+            for row in partition_all(6, data1):
                 with tags.div(cls="row mt-2 align-items-end"):
                     for col in row:
                         with tags.div(cls="col-2 text-center"):
@@ -196,8 +238,93 @@ with doc:
                                 tags.source(src=col["audio-path-theirs"], type="audio/wav")
 
             tags.h2("Speaker control", name="speaker-control", cls="mt-3")
-            tags.p("We show results for the unseen scenario.")
 
+            raw("""<p>In this experiment, we synthesize audio based on two inputs:
+            <em>(i)</em> the video stream showing the lip movement and
+            <em>(ii)</em> a target identity.
+            Based on whether we have seen (or not) the identity shown in the video at train time, we consider two scenarios:
+            <em>seen</em> and  <em>unseen</em>.
+            For each test video sample we synthesize audio in all target voices encountered at train time&mdash;you can select the desired target identity using the drop-down menu beneath each video.
+            We show a randomly selected sample for each subject.</p>""")
+
+            tags.h3("Seen scenario")
+
+            with tags.div(cls="form-group form-inline"):
+                tags.label("Method:")
+                with tags.select(cls="form-control ml-2 method", **{"data-scenario": "seen"}):
+                    tags.option("speaker identity (SI)", selected=True, data_name="ours-speaker-identity-dispel")
+                    tags.option("speaker embedding (SE)", data_name="ours-speaker-embedding-dispel")
+
+            data2 = load_results_2(
+                filelist="multi-speaker-tiny-test",
+                method="ours-speaker-embedding-dispel",
+            )
+
+            data2 = load_results_2(
+                filelist="multi-speaker-tiny-test",
+                method="ours-speaker-identity-dispel",
+            )
+
+            for row in partition_all(6, data2):
+                with tags.div(cls="row mt-2 align-items-end"):
+                    for col in row:
+                        key = f"seen-{col['sample-id']}"
+                        with tags.div(cls="col-2 text-center"):
+                            with tags.div():
+                                tags.span(col["speaker"], cls="text-muted")
+                                tags.code(col["sample-id"], cls="ml-1")
+                            tags.span(col["text"], cls="font-italic")
+                            with tags.video(controls=True, cls="embed-responsive"):
+                                tags.source(src=col["video-path"], type="video/webm")
+                            with tags.div(cls="form-group"):
+                                tags.label("Target identity:", fr=key)
+                                with tags.select(cls="form-control target-identity", id=key, data_scenario="seen"):
+                                    for t, _ in col["audio-paths-ours"]:
+                                        is_target_identity = t == col["speaker"]
+                                        tags.option(t, selected=is_target_identity, data_target=t, data_speaker=col["speaker"], data_sample=col["sample-id"])
+                            with tags.audio(controls=True, cls="embed-responsive", id=key + "-audio", data_scenario="seen"):
+                                p, = [p for t, p in col["audio-paths-ours"] if t == col["speaker"]]
+                                tags.source(src=p, type="audio/wav")
+
+            tags.h3("Unseen scenario")
+
+            with tags.div(cls="form-group form-inline"):
+                tags.label("Method:")
+                with tags.select(cls="form-control ml-2 method", data_scenario="unseen"):
+                    tags.option("speaker identity (SI)", selected=True, data_name="ours-speaker-identity-dispel")
+                    tags.option("speaker embedding (SE)", data_name="ours-speaker-embedding-dispel")
+
+            data3 = load_results_2(
+                filelist="unseen-k-tiny-test",
+                method="ours-speaker-embedding-dispel",
+            )
+
+            data3 = load_results_2(
+                filelist="unseen-k-tiny-test",
+                method="ours-speaker-identity-dispel",
+            )
+
+            for row in partition_all(6, data3):
+                with tags.div(cls="row mt-2 align-items-end"):
+                    for col in row:
+                        key = f"seen-{col['sample-id']}"
+                        with tags.div(cls="col-2 text-center"):
+                            with tags.div():
+                                tags.span(col["speaker"], cls="text-muted")
+                                tags.code(col["sample-id"], cls="ml-1")
+                            tags.span(col["text"], cls="font-italic")
+                            with tags.video(controls=True, cls="embed-responsive"):
+                                tags.source(src=col["video-path"], type="video/webm")
+                            with tags.div(cls="form-group"):
+                                tags.label("Target identity:", fr=key)
+                                with tags.select(cls="form-control target-identity", id=key, data_scenario="unseen"):
+                                    for t, _ in col["audio-paths-ours"]:
+                                        tags.option(t, data_target=t, data_speaker=col["speaker"], data_sample=col["sample-id"])
+                            with tags.audio(controls=True, cls="embed-responsive", id=key + "-audio", data_scenario="unseen"):
+                                _, p = first(col["audio-paths-ours"])
+                                tags.source(src=p, type="audio/wav")
+
+    tags.script(type="text/javascript", src="script.js")
 
 with open("output/www/is20/index.html", "w") as f:
     f.write(str(doc))
