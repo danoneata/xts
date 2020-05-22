@@ -6,7 +6,7 @@ audioread==2.1.8
 av==6.2.0
 backcall==0.1.0
 black==19.10b0
-bleach==3.1.0
+bleach==3.1.4
 certifi==2019.11.28
 cffi==1.13.2
 chardet==3.0.4
