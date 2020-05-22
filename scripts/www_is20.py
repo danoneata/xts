@@ -191,6 +191,7 @@ with doc.head:
     )
     # My scripts
     # tags.link(rel="stylesheet", href="static/style.css")
+    tags.link(rel="shortcut icon", href="favicon.ico", type="image/x-icon")
 
 
 # fmt: off
@@ -361,6 +362,18 @@ with doc:
                                 tags.source(src=p, type="audio/wav")
 
     tags.script(type="text/javascript", src="script.js")
+
+    raw(r"""
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-71565185-2"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'UA-71565185-2');
+    </script>
+    """)
 
 with open("output/www/is20/index.html", "w") as f:
     f.write(str(doc))
