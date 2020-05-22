@@ -1,3 +1,6 @@
+# TODO
+# - [ ] BUG On method update key current speaker
+
 import json
 import os
 import pdb
@@ -165,6 +168,9 @@ def load_results_2(filelist, method):
 doc = dominate.document(title="Speaker disentanglement in video-to-speech conversion")
 
 with doc.head:
+    tags.meta(**{'content': 'text/html;charset=utf-8', 'http-equiv': 'Content-Type'})
+    tags.meta(**{'content': 'utf-8', 'http-equiv': 'encoding'})
+
     # jQuery
     tags.script(
         type="text/javascript", src="https://code.jquery.com/jquery-3.5.1.min.js",
@@ -194,10 +200,10 @@ with doc:
         with tags.div(cls="container"):
 
             tags.h1("Speaker disentanglement in video-to-speech conversion", cls="mt-5")
-            tags.p(
-                "This web-page presents results for our Interspeech 2020 submission. "
-                "We show qualitative results for two sets of experiments:"
-            )
+            with tags.p():
+                tags.span("This web-page presents results for our Interspeech 2020 submission:")
+                tags.blockquote(raw(r"Dan Oneață, Adriana Stan, Horia Cucu. Speaker disentanglement in video-to-speech conversion."), cls="blockqoute ml-4 font-italic")
+                tags.span("We show qualitative results for two sets of experiments:")
 
             with tags.ul():
 
@@ -209,14 +215,18 @@ with doc:
                     tags.a("speaker control", href="#speaker-control")
                     tags.span("in which we evaluate a speaker-dependent model to generate audio in a target voice.")
 
-            tags.p("Our code is available here.")
-            tags.span("Note: If you are having trouble playing the videos below, please consider using the Chrome browser.", cls="text-muted")
+            p = tags.p("Our code is available ")
+            p += tags.a("here", href="")  # TODO
+            p += "."
+
+            tags.span("Note: If you are having trouble playing the videos below, please consider using the Chrome or Firefox browsers.", cls="text-muted")
 
             tags.h2("Video-to-speech", name="video-to-speech", cls="mt-3")
-            tags.p(
-                "We show results for the seen scenario (four speakers which were also used at traning). "
-                "We randomly selected 12 samples and showing the synthesized audio for our method (baseline or B) and for the work of Vougioukas et al. (Interspeech, 2019), denoted by V2S GAN. "
-                "We show the lip crops, similar to the input of our network (although the network gets grayscale videos)."
+            raw(
+                "<p>We show results for the <em>seen</em> scenario, in which we consider videos from four speakers encountered at training. "
+                "We have randomly selected 12 video samples and show the synthesized audio for our baseline method (denoted by B in the paper) and for the work of <a href='https://www.isca-speech.org/archive/Interspeech_2019/pdfs/1445.pdf'>Vougioukas et al. (Interspeech, 2019)</a> (denoted by V2S GAN). "
+                "The videos are cropped around the lips, corresponding to the input to our network. "
+                "These results correspond to section 4.1 in our paper.</p>"
             )
 
             data1 = load_results_1()
@@ -239,15 +249,33 @@ with doc:
 
             tags.h2("Speaker control", name="speaker-control", cls="mt-3")
 
-            raw("""<p>In this experiment, we synthesize audio based on two inputs:
-            <em>(i)</em> the video stream showing the lip movement and
-            <em>(ii)</em> a target identity.
-            Based on whether we have seen (or not) the identity shown in the video at train time, we consider two scenarios:
-            <em>seen</em> and  <em>unseen</em>.
-            For each test video sample we synthesize audio in all target voices encountered at train time&mdash;you can select the desired target identity using the drop-down menu beneath each video.
-            We show a randomly selected sample for each subject.</p>""")
+            p = tags.p("In this experiment, we synthesize audio based on two inputs:")
+            p += tags.em("(i) ")
+            p += "the video stream showing the lip movement and "
+            p += tags.em("(ii) ")
+            p += "a target identity. "
+            p += "For each test video sample we synthesize audio in all target voices encountered at train time. "
+            p += "Based on whether we have seen (or not) the identity shown in the video at train time, we have two scenarios: "
+            p += tags.em("seen")
+            p += " and "
+            p += tags.em("unseen")
+            p += ". "
+            p += "You can select the desired target identity using the drop-down menu beneath each video."
+            # p += "We show a randomly selected sample for each subject."
+
+            # raw("""<p>In this experiment, we synthesize audio based on two inputs:
+            # <em>(i)</em> the video stream showing the lip movement and
+            # <em>(ii)</em> a target identity.
+            # Based on whether we have seen (or not) the identity shown in the video at train time, we consider two scenarios:
+            # <em>seen</em> and  <em>unseen</em>.
+            # For each test video sample we synthesize audio in all target voices encountered at train time&mdash;you can select the desired target identity using the drop-down menu beneath each video.
+            # We show a randomly selected sample for each subject.</p>""")
 
             tags.h3("Seen scenario")
+
+            p = tags.p("In this scenario the input videos at test time have identities also encountered at train time (14 identities), ")
+            p += "but neither the video samples nor the word sequence were seen during training. "
+            p += "Due to space limitations, we were not able to present quantitative results for this setting in our paper."
 
             with tags.div(cls="form-group form-inline"):
                 tags.label("Method:")
@@ -286,7 +314,12 @@ with doc:
                                 p, = [p for t, p in col["audio-paths-ours"] if t == col["speaker"]]
                                 tags.source(src=p, type="audio/wav")
 
-            tags.h3("Unseen scenario")
+            tags.h3("Unseen scenario", cls="mt-3")
+
+            p = tags.p("In this scenario the identities of the people in the input videos at test time (9 identities) are different from the identities of the people at train time (14 identities). ")
+            p += "We still synthesize speech in all target voices encountered at train time (14 voices). "
+            p += "These results correspond to section 4.2 in our paper."
+
 
             with tags.div(cls="form-group form-inline"):
                 tags.label("Method:")
