@@ -24,6 +24,7 @@ The code is organized as follows:
 - `train_dispel.py` and `train_revgrad.py` are used to train models that _dispel_ the speaker identity from the visual features.
 - `train_asr_clf.py` and `train_speaker_clf.py` train linear probes in the _visual_ feature space.
 - `hparams.py` contain hyper-parameter configurations.
+- `audio.py` contains audio-processing functionality, _e.g._ extracting Mel spectrograms.
 - `models/` contain video-to-speech architectures (video decoders and audio decoders).
 - `src/` contains data structures that wrap datasets.
 - `evaluate/` implement the evaluation metrics (PESQ, MCD, STOI, WER).
@@ -33,7 +34,7 @@ The code is organized as follows:
 ## Getting started
 
 We provide a data bundle (video, audio, face landmarks, speaker embeddings) for a speaker in GRID (the speaker `s1`).
-You can download the data from [here]() and extract it locally:
+You can download the data from [here](https://drive.google.com/open?id=1CKBSUKU4kN3xj0keC7zEORexioMJr6W0) and extract it locally:
 
 ```bash
 unzip grid-s1.zip
