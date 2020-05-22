@@ -220,7 +220,7 @@ with doc:
 
             tags.span("Note: If you are having trouble playing the videos below, please consider using the Chrome or Firefox browsers.", cls="text-muted")
 
-            tags.h2("Video-to-speech", name="video-to-speech", cls="mt-3")
+            tags.h2("Video-to-speech", id="video-to-speech", cls="mt-3")
             raw(
                 "<p>We show results for the <em>seen</em> scenario, in which we consider videos from four speakers encountered at training. "
                 "We have randomly selected 12 video samples and show the synthesized audio for our baseline method (denoted by B in the paper) and for the work of <a href='https://www.isca-speech.org/archive/Interspeech_2019/pdfs/1445.pdf'>Vougioukas et al. (Interspeech, 2019)</a> (denoted by V2S GAN). "
@@ -246,7 +246,7 @@ with doc:
                             with tags.audio(controls=True, cls="embed-responsive"):
                                 tags.source(src=col["audio-path-theirs"], type="audio/wav")
 
-            tags.h2("Speaker control", name="speaker-control", cls="mt-3")
+            tags.h2("Speaker control", id="speaker-control", cls="mt-3")
 
             p = tags.p("In this experiment, we synthesize audio based on two inputs:")
             p += tags.em("(i) ")
