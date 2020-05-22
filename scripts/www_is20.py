@@ -259,7 +259,11 @@ with doc:
             p += " and "
             p += tags.em("unseen")
             p += ". "
-            p += "You can select the desired target identity using the drop-down menu beneath each video."
+            p += "You can select the desired target identity using the drop-down menu beneath each video. "
+
+            p = tags.p("We also provide results for two of our methods, which incorporate the speaker information in various forms—either the speaker identity (SI) or speaker embedding (SE). ")
+            p += "You can select the method using the corresponding drop-down menu. "
+            p += "Note that the SE method is not able to control the speaker as well as SI, but it can still translate reasonably well across genders (when going from male to female speakers, or viceversa)."
             # p += "We show a randomly selected sample for each subject."
 
             # raw("""<p>In this experiment, we synthesize audio based on two inputs:
