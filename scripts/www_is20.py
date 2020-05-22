@@ -1,3 +1,4 @@
+# Generates static web-page: http://speed.pub.ro/xts/
 # TODO
 # - [ ] BUG On method update key current speaker
 
@@ -216,7 +217,7 @@ with doc:
                     tags.span("in which we evaluate a speaker-dependent model to generate audio in a target voice.")
 
             p = tags.p("Our code is available ")
-            p += tags.a("here", href="")  # TODO
+            p += tags.a("here", href="https://github.com/danoneata/xts")
             p += "."
 
             tags.span("Note: If you are having trouble playing the videos below, please consider using the Chrome or Firefox browsers.", cls="text-muted")
