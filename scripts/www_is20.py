@@ -1,6 +1,4 @@
 # Generates static web-page: http://speed.pub.ro/xts/
-# TODO
-# - [ ] BUG On method update key current speaker
 
 import json
 import os
@@ -311,9 +309,9 @@ with doc:
                                     for t, _ in col["audio-paths-ours"]:
                                         is_target_identity = t == col["speaker"]
                                         tags.option(t, selected=is_target_identity, data_target=t, data_speaker=col["speaker"], data_sample=col["sample-id"])
-                            with tags.audio(controls=True, cls="embed-responsive", id=key + "-audio", data_scenario="seen"):
-                                p, = [p for t, p in col["audio-paths-ours"] if t == col["speaker"]]
-                                tags.source(src=p, type="audio/wav")
+                            p, = [p for t, p in col["audio-paths-ours"] if t == col["speaker"]]
+                            # tags.source(src=p, type="audio/wav")
+                            tags.audio(controls=True, cls="embed-responsive", id=key + "-audio", data_scenario="seen", src=p)
 
             tags.h3("Unseen scenario", cls="mt-3")
 
