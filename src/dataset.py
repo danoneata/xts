@@ -15,7 +15,6 @@ import librosa
 from PIL import Image
 
 from torch.nn import functional as F
-from moviepy.editor import *
 
 import torch
 import torch.utils.data
