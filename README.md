@@ -11,14 +11,19 @@ conda activate xts
 pip install -r requirements.txt
 ```
 
+Note: Depending on your GPU, you may need to specify different versions for `cudatoolkit` and `Pytorch` in the `environment.yml` configuration file.
+
 Clone the Tacotron2 repository:
 
 ```bash
 git clone https://github.com/NVIDIA/tacotron2.git
 ```
 
-## Code structure
+## Structure
 
+We describe how the code and data are organized in the repository.
+
+**Code.**
 The code is organized as follows:
 
 - `train.py` is the main script, which trains video-to-speech models.
@@ -32,12 +37,31 @@ The code is organized as follows:
 - `scripts/` contain mostly scripts to run experiments or process data.
 - `data/` is where the datasets are stored (_i.e._, videos, audio, face landmarks, speaker embeddings).
 
+**Data.**
+The `data` folder contains a folder for each audio-visual dataset,
+which in turn contains sub-folders for the different modalities,
+the most important being audio, face landmarks, file-lists, speaker embeddings, video.
+An example directory structure for the GRID dataset is the following:
+```
+data/
+└── grid
+    ├── audio-from-video
+    ├── face-landmarks
+    ├── filelists
+    ├── speaker-embeddings
+    └── video
+```
+
+The path names are set by the [`PathLoader`](https://github.com/danoneata/xts/blob/master/src/dataset.py#L75) from [`src/dataset.py`](https://github.com/danoneata/xts/blob/master/src/dataset.py)
+and they can vary from dataset to dataset.
+
 ## Getting started
 
 We provide a data bundle (video, audio, face landmarks, speaker embeddings) for a speaker in GRID (the speaker `s1`).
-You can download the data from [here](https://drive.google.com/open?id=1CKBSUKU4kN3xj0keC7zEORexioMJr6W0) and extract it locally:
+You can download the data from [here](https://sharing.speed.pub.ro/owncloud/index.php/s/U1xmWRLc985A12m) and extract it locally in the folder containing the code:
 
 ```bash
+wget "https://sharing.speed.pub.ro/owncloud/index.php/s/U1xmWRLc985A12m/download" -O grid-s1.zip
 unzip grid-s1.zip
 ```
 
