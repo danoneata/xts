@@ -1,4 +1,4 @@
-name: xts2
+name: xts
 channels:
   - defaults
 dependencies:
