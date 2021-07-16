@@ -1,5 +1,11 @@
 This repository contains code for video-to-speech conversion.
-For more information, please see our Interspeech 2020 submission.
+For more information, please see our EUSIPCO 2021 paper (available on [arXiv](https://arxiv.org/abs/2105.09652)):
+
+> Dan Oneață, Adriana Stan, Horia Cucu.
+> Speaker disentanglement in video-to-speech conversion.
+> EUSIPCO, 2021.
+
+Qualitative samples are available [here](http://speed.pub.ro/xts/).
 
 ## Installation
 
