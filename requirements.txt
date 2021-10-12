@@ -5,7 +5,7 @@ pypesq==1.2.4
 pystoi==0.2.2
 python-speech-features==0.6
 pytorch-ignite==0.3.0
-opencv-python==4.1.1.26
+opencv-python==4.2.0.32
 scikit-learn==0.22
 toolz
 tqdm
