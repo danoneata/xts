@@ -104,6 +104,24 @@ To evaluate the intelligibility of the synthesized speech, we used an automatic 
 The ASR is based on Kaldi and trained on the [TED-LIUM dataset](https://openslr.magicdatatech.com/19/).
 For evaluation, we constrained the language model to GRID's vocabulary by using a finite state grammar constructed from the sentences in GRID.
 
+<details>
+<summary>The finite state grammar used to constrain the language model</summary>
+```
+#JSGF 1.0;
+
+grammar grid;
+
+<command> = bin | lay | place | set;
+<color> = blue | green | red | white;
+<preposition> = at | by | in | with;
+<letter> = a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | x | y | z;
+<digit> = zero | one | two | three | four | five | six | seven | eight | nine;
+<adverb> = again | now | please | soon;
+
+public <utterance> = <command> <color> <preoposition> <letter> <digit> <adverb>;
+```
+</details>
+
 To replicate our results, you need to follow these steps:
 1. Install [Kaldi](https://kaldi-asr.org/)
 2. Download [our models and scripts](https://sharing.speed.pub.ro/owncloud/index.php/s/rUkbhaGq5QfI9rW) and extract them locally:
