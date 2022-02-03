@@ -107,17 +107,12 @@ For evaluation, we constrained the language model to GRID's vocabulary by using 
 <details>
 <summary>The finite state grammar used to constrain the language model</summary>
 ```
-#JSGF 1.0;
-
-grammar grid;
-
 <command> = bin | lay | place | set;
 <color> = blue | green | red | white;
 <preposition> = at | by | in | with;
 <letter> = a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | x | y | z;
 <digit> = zero | one | two | three | four | five | six | seven | eight | nine;
 <adverb> = again | now | please | soon;
-
 public <utterance> = <command> <color> <preoposition> <letter> <digit> <adverb>;
 ```
 </details>
