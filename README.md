@@ -106,6 +106,7 @@ For evaluation, we constrained the language model to GRID's vocabulary by using 
 
 <details>
 <summary>The finite state grammar used to constrain the language model</summary>
+
 ```
 <command> = bin | lay | place | set;
 <color> = blue | green | red | white;
@@ -115,6 +116,7 @@ For evaluation, we constrained the language model to GRID's vocabulary by using 
 <adverb> = again | now | please | soon;
 public <utterance> = <command> <color> <preoposition> <letter> <digit> <adverb>;
 ```
+
 </details>
 
 To replicate our results, you need to follow these steps:
