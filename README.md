@@ -97,3 +97,32 @@ python predict.py -m magnus --model-path output/models/grid_multi-speaker_magnus
 # source venv/bin/activate
 python synthesize_spectro.py ~/work/xts/output/predictions/grid-multi-test-magnus.npz
 ```
+
+## Evaluating intelligibility with an ASR
+
+To evaluate the intelligibility of the synthesized speech, we used an automatic speech recognition (ASR) system.
+The ASR is based on Kaldi and trained on the [TED-LIUM dataset](https://openslr.magicdatatech.com/19/).
+For evaluation, we constrained the language model to GRID's vocabulary by using a finite state grammar constructed from the sentences in GRID.
+
+To replicate our results, you need to follow these steps:
+1. Install [Kaldi](https://kaldi-asr.org/)
+2. Download [our models and scripts](https://sharing.speed.pub.ro/owncloud/index.php/s/rUkbhaGq5QfI9rW) and extract them locally:
+```bash
+unzip xts-asr.zip
+```
+3. Set up the path to Kaldi in `xts-asr/path.sh`; for example:
+```bash
+export KALDI_ROOT=/home/doneata/src/kaldi
+```
+4. Link to the `steps` and `utils` folders from Kaldi in `xts-asr`; for example:
+```bash
+ln -s /home/doneata/src/kaldi/egs/wsj/s5/steps steps
+ln -s /home/doneata/src/kaldi/egs/wsj/s5/utils utils
+```
+5. Run an evaluation by using the `xts-asr/run.sh` script:
+```bash
+bash run.sh --dset tiny
+```
+6. To define a new dataset, you will need to prepare the files `wav.scp`, `text`, `utt2spk` and `spk2utt`.
+For an example see the files in `xts-asr/data/grid/tiny`.
+For more information, please consult the [Kaldi documentation](https://kaldi-asr.org/doc/data_prep.html).
